@@ -1,0 +1,3358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AuTrack · Nanoparticle QC</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+
+
+<style>
+:root{
+  --bg:#080C12;
+  --panel:#0C1018;
+  --surface:#10151E;
+  --surface-hi:#161C28;
+  --border:#1C2333;
+  --border-hi:#253045;
+  --gold:#C8A84B;
+  --gold-hi:#DFC06A;
+  --gold-lo:#7A6128;
+  --gold-glow:rgba(200,168,75,0.12);
+  --text:#C8D0E0;
+  --text-2:#7A8AA8;
+  --text-3:#3E4D66;
+  --green:#3ECF8E;
+  --red:#E05C5C;
+  --amber:#E0943C;
+  --blue:#4A9FE0;
+  --purple:#9B6FE0;
+  --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --mono:'JetBrains Mono','SF Mono','Fira Code','Cascadia Code','Consolas',monospace;
+  --radius:6px;
+  --shadow-md:0 4px 24px rgba(0,0,0,0.4);
+}
+body.light{
+  --bg:#F4F5F7;
+  --panel:#FFFFFF;
+  --surface:#F0F2F5;
+  --surface-hi:#E8EBF0;
+  --border:#DDE1EA;
+  --border-hi:#C8CFDC;
+  --gold:#9A6E1A;
+  --gold-hi:#7A5210;
+  --gold-lo:#C8A84B;
+  --gold-glow:rgba(154,110,26,0.12);
+  --text:#1A2030;
+  --text-2:#4A5568;
+  --text-3:#8A96AA;
+  --green:#1A9E60;
+  --red:#C83C3C;
+  --amber:#C07020;
+  --blue:#2A7FC0;
+  --purple:#6A4FC0;
+  --shadow-md:0 4px 24px rgba(0,0,0,0.1);
+}
+body.light::after{
+  background:
+    radial-gradient(ellipse 70% 45% at 15% 0%,rgba(200,168,75,0.07) 0%,transparent 65%),
+    radial-gradient(ellipse 50% 35% at 85% 100%,rgba(74,159,224,0.05) 0%,transparent 60%);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;-webkit-font-smoothing:antialiased}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  font-weight:400;
+  line-height:1.55;
+  min-height:100vh;
+}
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 70% 45% at 15% 0%,rgba(200,168,75,0.05) 0%,transparent 65%),
+    radial-gradient(ellipse 50% 35% at 85% 100%,rgba(74,159,224,0.04) 0%,transparent 60%);
+  pointer-events:none;z-index:0;
+}
+#app{position:relative;z-index:1}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:99px}
+input,select,textarea,button{font-family:var(--sans);font-size:inherit}
+input[type=date]{color-scheme:dark}
+
+/* ─── HEADER ─── */
+.hdr{
+  position:sticky;top:0;z-index:200;
+  height:56px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;gap:16px;
+  background:rgba(8,12,18,0.97);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(20px);
+  box-shadow:0 1px 0 0 rgba(200,168,75,0.07);
+}
+.hdr-left{display:flex;align-items:center;gap:20px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:11px}
+.brand-icon{
+  width:30px;height:30px;border-radius:5px;
+  background:linear-gradient(135deg,#1C1800,#2A2400);
+  border:1px solid var(--gold-lo);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 14px var(--gold-glow);
+  font-family:var(--mono);font-size:11px;font-weight:500;
+  color:var(--gold);letter-spacing:-0.03em;
+  flex-shrink:0;
+}
+.brand-text{
+  font-size:15px;font-weight:600;
+  color:var(--text);letter-spacing:-0.02em;
+}
+.brand-tag{
+  font-family:var(--mono);font-size:9px;font-weight:500;
+  color:var(--text-3);letter-spacing:0.14em;text-transform:uppercase;
+  margin-top:1px;
+}
+.hdr-sep{width:1px;height:22px;background:var(--border);flex-shrink:0}
+.nav{display:flex;gap:1px}
+.nb{
+  padding:6px 13px;border-radius:var(--radius);
+  border:none;cursor:pointer;font-size:13px;font-weight:400;
+  background:transparent;color:var(--text-2);
+  transition:color 0.13s,background 0.13s;
+}
+.nb:hover{color:var(--text);background:var(--surface)}
+.nb.on{color:var(--text);background:var(--surface-hi)}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.btn-new{
+  padding:7px 15px;border-radius:var(--radius);
+  border:1px solid var(--gold-lo);
+  background:linear-gradient(160deg,rgba(122,97,40,0.4),rgba(30,24,0,0.8));
+  color:var(--gold-hi);font-size:13px;font-weight:500;
+  cursor:pointer;transition:all 0.15s;white-space:nowrap;
+}
+.btn-new:hover{border-color:var(--gold);box-shadow:0 0 16px var(--gold-glow)}
+.btn-reset{
+  padding:6px 12px;border-radius:var(--radius);
+  border:none;background:transparent;
+  color:var(--text-3);font-size:11px;cursor:pointer;
+  transition:color 0.13s;
+}
+.btn-reset:hover{color:var(--text-2)}
+
+/* ─── PAGE LAYOUT ─── */
+.page{padding:28px 32px;max-width:1380px;margin:0 auto}
+
+/* ─── STATS ROW ─── */
+.stats{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+.stat{
+  flex:1;min-width:100px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:16px 20px;
+  position:relative;overflow:hidden;
+}
+.stat::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,currentColor 50%,transparent);
+  opacity:0.4;
+}
+.stat::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(160deg,rgba(255,255,255,0.015) 0%,transparent 60%);
+  pointer-events:none;
+}
+.stat-val{font-family:var(--mono);font-size:26px;font-weight:400;line-height:1;margin-bottom:5px}
+.stat-lbl{font-family:var(--mono);font-size:9px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em}
+
+/* ─── PANEL ─── */
+.pnl{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  margin-bottom:14px;
+  overflow:hidden;
+}
+.pnl-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;
+  border-bottom:1px solid var(--border);
+  gap:12px;flex-wrap:wrap;
+}
+.pnl-title{
+  font-family:var(--mono);font-size:10px;font-weight:500;
+  color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;
+}
+.pnl-body{padding:20px}
+
+/* ─── TABLE ─── */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead tr{border-bottom:1px solid var(--border)}
+th{
+  padding:9px 14px;
+  font-family:var(--mono);font-size:9px;font-weight:500;
+  color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;
+  white-space:nowrap;text-align:left;
+}
+td{
+  padding:12px 14px;font-size:13px;
+  color:var(--text-2);
+  border-bottom:1px solid var(--border);
+}
+tbody tr:last-child td{border-bottom:none}
+.tr-link{cursor:pointer;transition:background 0.12s}
+.tr-link:hover td{background:var(--surface);color:var(--text)}
+.tr-link:hover td:first-child{box-shadow:inset 2px 0 0 var(--gold-lo)}
+
+/* ─── BADGE ─── */
+.badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 10px;border-radius:3px;
+  font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:0.04em;
+}
+.badge::before{
+  content:'';width:4px;height:4px;border-radius:50%;
+  background:currentColor;flex-shrink:0;
+}
+
+/* ─── BUTTONS ─── */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 15px;border-radius:var(--radius);
+  cursor:pointer;font-size:13px;font-weight:500;
+  border:none;transition:all 0.14s;white-space:nowrap;
+}
+.btn-primary{
+  background:linear-gradient(135deg,#8A6A20,#5A4410);
+  color:var(--gold-hi);border:1px solid var(--gold-lo);
+}
+.btn-primary:hover{border-color:var(--gold);box-shadow:0 0 14px var(--gold-glow)}
+.btn-ghost{
+  background:transparent;border:1px solid var(--border-hi);
+  color:var(--text-2);
+}
+.btn-ghost:hover{background:var(--surface);color:var(--text);border-color:var(--border-hi)}
+.btn-del{
+  background:transparent;border:1px solid transparent;
+  color:var(--text-3);padding:8px 12px;font-size:12px;
+}
+.btn-del:hover{color:var(--red);border-color:rgba(224,92,92,0.3);background:rgba(224,92,92,0.08)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+
+/* ─── SEARCH INPUT ─── */
+.search{
+  padding:7px 12px;border-radius:var(--radius);
+  border:1px solid var(--border-hi);
+  background:var(--bg);color:var(--text);
+  font-size:12px;font-family:var(--sans);
+  outline:none;width:210px;transition:border-color 0.14s;
+}
+.search:focus{border-color:var(--gold-lo)}
+.search::placeholder{color:var(--text-3)}
+
+/* ─── FORMS ─── */
+.field{flex:1;min-width:175px}
+.lbl{
+  display:block;font-family:var(--mono);font-size:9px;font-weight:500;
+  color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;
+  margin-bottom:6px;
+}
+.inp{
+  width:100%;padding:9px 12px;border-radius:var(--radius);
+  border:1px solid var(--border-hi);
+  background:var(--bg);color:var(--text);
+  font-size:13px;font-family:var(--sans);outline:none;
+  transition:border-color 0.14s;
+}
+.inp:focus{border-color:var(--gold-lo);box-shadow:0 0 0 3px var(--gold-glow)}
+.inp::placeholder{color:var(--text-3)}
+select.inp{cursor:pointer}
+textarea.inp{resize:vertical;min-height:76px;line-height:1.5}
+.frow{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+
+/* ─── MODAL ─── */
+.overlay{
+  position:fixed;inset:0;z-index:500;
+  background:rgba(4,6,10,0.85);
+  backdrop-filter:blur(10px);
+  display:flex;align-items:center;justify-content:center;
+}
+.modal{
+  background:var(--panel);
+  border:1px solid var(--border-hi);
+  border-radius:8px;
+  width:720px;max-width:95vw;max-height:92vh;
+  overflow-y:auto;
+  box-shadow:0 32px 100px rgba(0,0,0,0.7),0 0 0 1px rgba(200,168,75,0.06);
+}
+.modal-hdr{
+  padding:20px 24px 18px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+}
+.modal-title{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-0.01em}
+.modal-sub{font-family:var(--mono);font-size:11px;color:var(--gold);margin-top:3px}
+.modal-body{padding:22px 24px}
+.modal-close{
+  background:transparent;border:none;cursor:pointer;
+  color:var(--text-3);font-size:18px;line-height:1;padding:2px 4px;
+  transition:color 0.13s;flex-shrink:0;
+}
+.modal-close:hover{color:var(--text)}
+.modal-foot{
+  padding:16px 24px;
+  border-top:1px solid var(--border);
+  display:flex;justify-content:flex-end;gap:8px;
+}
+
+/* ─── UPLOAD ZONE ─── */
+.dropzone{
+  border:1px dashed var(--border-hi);
+  border-radius:var(--radius);padding:32px 20px;
+  text-align:center;cursor:pointer;
+  background:var(--surface);
+  transition:all 0.18s;margin-bottom:18px;
+}
+.dropzone:hover{border-color:var(--gold-lo);background:var(--surface-hi)}
+.dropzone.loaded{border-color:var(--green);border-style:solid;background:rgba(62,207,142,0.04)}
+.dz-icon{font-size:28px;margin-bottom:10px;opacity:0.6}
+.dz-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px}
+.dz-sub{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+/* ─── SCAN PREVIEW ─── */
+.preview{
+  background:var(--surface);
+  border:1px solid var(--border-hi);
+  border-left:2px solid var(--gold);
+  border-radius:var(--radius);
+  padding:14px 18px;margin-bottom:18px;
+}
+.preview-lbl{font-family:var(--mono);font-size:9px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px}
+.preview-row{display:flex;gap:28px;flex-wrap:wrap}
+.pi-key{font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px}
+.pi-val{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--text)}
+
+/* ─── COA GRID ─── */
+.coa{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));
+  border-top:1px solid var(--border);
+  border-left:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;
+}
+.coa-cell{
+  padding:12px 16px;
+  border-right:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+}
+.coa-k{font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px}
+.coa-v{font-family:var(--mono);font-size:13px;color:var(--text);word-break:break-word}
+.coa-note{margin-top:12px;padding:11px 15px;border-left:2px solid var(--gold-lo);background:rgba(200,168,75,0.04);border-radius:0 var(--radius) var(--radius) 0;font-size:13px;color:var(--text-2)}
+@media(max-width:900px){.coa{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.coa{grid-template-columns:repeat(2,1fr)}}
+
+/* ─── BACK ROW ─── */
+.back-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px}
+.back-info{display:flex;align-items:center;gap:14px;flex-shrink:0}
+.lot-id{font-family:var(--mono);font-size:18px;font-weight:500;color:var(--gold)}
+.lot-sub{font-size:12px;color:var(--text-3);margin-top:3px}
+/* Toolbar: right side of back-row */
+.toolbar{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.toolbar-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.toolbar-sep{width:1px;height:22px;background:var(--border);margin:0 2px}
+
+/* ─── CHART LEGEND ─── */
+.leg{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.leg-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:3px;cursor:pointer;
+  font-family:var(--mono);font-size:10px;
+  background:transparent;border:1px solid transparent;
+  transition:opacity 0.14s;
+}
+svg.chart{width:100%;display:block}
+
+/* ─── SECTION RULE ─── */
+.srule{
+  display:flex;align-items:center;gap:10px;
+  margin:22px 0 14px;
+}
+.srule-txt{font-family:var(--mono);font-size:9px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;white-space:nowrap}
+.srule-line{flex:1;height:1px;background:var(--border)}
+
+/* ─── COMPARE CHIPS ─── */
+.chip{
+  padding:6px 14px;border-radius:var(--radius);cursor:pointer;
+  font-family:var(--mono);font-size:11px;
+  border:1px solid var(--border-hi);
+  background:transparent;color:var(--text-3);
+  transition:all 0.14s;
+}
+.chip.on{border-color:var(--gold-lo);background:rgba(200,168,75,0.08);color:var(--gold)}
+
+/* ─── EMPTY ─── */
+.empty{text-align:center;padding:52px 20px;color:var(--text-3)}
+.empty-icon{font-size:32px;opacity:0.3;margin-bottom:12px}
+.empty-msg{font-size:13px;font-family:var(--mono)}
+
+@media(max-width:700px){
+  .page{padding:16px 16px}
+  .hdr{padding:0 16px}
+}
+
+/* ─── THEME TOGGLE ─── */
+.theme-btn{
+  width:34px;height:34px;border-radius:var(--radius);
+  border:1px solid var(--border-hi);background:transparent;
+  color:var(--text-2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;transition:all 0.14s;flex-shrink:0;
+}
+.theme-btn:hover{background:var(--surface);color:var(--text);border-color:var(--gold-lo)}
+
+/* ─── ALERT BANNERS ─── */
+.alert-bar{
+  display:flex;align-items:stretch;gap:0;
+  border:1px solid;border-radius:var(--radius);
+  overflow:hidden;margin-bottom:14px;
+}
+.alert-bar-stripe{width:4px;flex-shrink:0}
+.alert-bar-body{padding:12px 16px;flex:1}
+.alert-bar-title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px}
+.alert-bar-sub{font-size:12px;color:var(--text-2);font-family:var(--mono)}
+.alert-bar.warn{border-color:rgba(224,148,60,0.35);background:rgba(224,148,60,0.06)}
+.alert-bar.warn .alert-bar-stripe{background:var(--amber)}
+.alert-bar.danger{border-color:rgba(224,92,92,0.35);background:rgba(224,92,92,0.06)}
+.alert-bar.danger .alert-bar-stripe{background:var(--red)}
+.alert-bar.info{border-color:rgba(74,159,224,0.3);background:rgba(74,159,224,0.05)}
+.alert-bar.info .alert-bar-stripe{background:var(--blue)}
+
+/* ── Conjugate list item ── */
+.conj-list-item{
+  border-bottom:1px solid var(--border);
+  transition:background 0.12s;
+}
+.conj-list-item:last-child{border-bottom:none}
+.conj-list-item:hover .conj-list-row{background:var(--surface-hi)}
+.conj-list-row{transition:background 0.12s}
+
+/* ─── EXPIRY PILL on table ─── */
+.expiry-pill{
+  display:inline-flex;align-items:center;gap:4px;
+  font-family:var(--mono);font-size:10px;padding:2px 7px;
+  border-radius:3px;font-weight:500;
+}
+.expiry-pill.ok{color:var(--green);background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.2)}
+.expiry-pill.soon{color:var(--amber);background:rgba(224,148,60,0.1);border:1px solid rgba(224,148,60,0.25)}
+.expiry-pill.expired{color:var(--red);background:rgba(224,92,92,0.1);border:1px solid rgba(224,92,92,0.25)}
+
+/* ─── SETTINGS PAGE ─── */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.settings-grid{grid-template-columns:1fr}}
+.setting-row{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:14px 0;border-bottom:1px solid var(--border);
+}
+.setting-row:last-child{border-bottom:none}
+.setting-lbl{font-size:13px;color:var(--text)}
+.setting-sub{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:2px}
+.setting-inp{width:90px;text-align:right}
+.seg{display:flex;gap:0;border:1px solid var(--border-hi);border-radius:var(--radius);overflow:hidden}
+.seg-btn{
+  padding:6px 12px;background:transparent;border:none;
+  color:var(--text-2);font-size:12px;cursor:pointer;
+  transition:all 0.13s;
+}
+.seg-btn.on{background:var(--surface-hi);color:var(--text)}
+.seg-btn:not(:last-child){border-right:1px solid var(--border-hi)}
+
+/* ─── PASTE MODAL ─── */
+.paste-area{
+  width:100%;min-height:160px;padding:12px 14px;
+  border:1px solid var(--border-hi);border-radius:var(--radius);
+  background:var(--bg);color:var(--text);
+  font-family:var(--mono);font-size:12px;line-height:1.6;
+  outline:none;resize:vertical;
+  transition:border-color 0.14s;
+}
+.paste-area:focus{border-color:var(--gold-lo);box-shadow:0 0 0 3px var(--gold-glow)}
+.paste-area::placeholder{color:var(--text-3)}
+.parse-preview{
+  background:var(--surface);border:1px solid var(--border-hi);
+  border-radius:var(--radius);padding:10px 14px;margin-top:10px;
+  font-family:var(--mono);font-size:11px;color:var(--text-2);
+  display:flex;gap:16px;flex-wrap:wrap;align-items:center;
+}
+.parse-ok{color:var(--green)}
+.parse-err{color:var(--red)}
+
+/* ─── INFO PAGE ─── */
+.info-page{background:#fff;min-height:100vh;color:#1A1A1A;font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;}
+.info-hero{background:linear-gradient(135deg,#1C1800 0%,#2A2400 50%,#0D1018 100%);padding:40px 48px 36px;border-bottom:3px solid #C8A84B;}
+.info-hero-title{font-size:26px;font-weight:700;color:#fff;margin-bottom:6px;letter-spacing:-0.02em;}
+.info-hero-sub{font-size:13px;color:rgba(200,168,75,0.8);font-family:'JetBrains Mono',monospace;}
+.info-body{max-width:960px;margin:0 auto;padding:40px 32px;}
+.info-section{margin-bottom:48px;}
+.info-section-header{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:10px;border-bottom:2px solid #F0EDE6;}
+.info-section-icon{width:32px;height:32px;border-radius:6px;background:#F9F7F0;border:1px solid #E0D8C0;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.info-section-title{font-size:18px;font-weight:700;color:#1A1A1A;letter-spacing:-0.01em;}
+.info-section-sub{font-size:12px;color:#9A8A6A;font-family:'JetBrains Mono',monospace;margin-top:1px;}
+.info-p{font-size:13.5px;color:#333;line-height:1.7;margin-bottom:12px;}
+.info-p:last-child{margin-bottom:0;}
+.info-p strong{color:#1A1A1A;font-weight:600;}
+.info-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:0;}
+.info-kpi-card{background:#FDFCF9;border:1px solid #E8E2D8;border-radius:8px;padding:16px 18px;}
+.info-kpi-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.info-kpi-name{font-size:14px;font-weight:700;color:#1A1A1A;}
+.info-kpi-unit{font-size:11px;color:#9A8A6A;font-family:'JetBrains Mono',monospace;margin-left:auto;background:#F0EDE6;padding:1px 6px;border-radius:3px;}
+.info-kpi-formula{font-size:11px;font-family:'JetBrains Mono',monospace;color:#7A6A4A;background:#F5F2EA;border-radius:4px;padding:5px 8px;margin-bottom:8px;}
+.info-kpi-desc{font-size:12.5px;color:#555;line-height:1.55;}
+.info-threshold-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px;}
+.info-threshold-table th{padding:7px 12px;text-align:left;font-weight:600;color:#9A8A6A;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;border-bottom:1px solid #E8E2D8;}
+.info-threshold-table td{padding:7px 12px;border-bottom:1px solid #F0EDE6;color:#333;font-family:'JetBrains Mono',monospace;font-size:12px;vertical-align:top;}
+.info-threshold-table td:first-child{font-family:'Inter',sans-serif;font-weight:500;color:#1A1A1A;}
+.info-threshold-table tr:last-child td{border-bottom:none;}
+.info-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;font-family:'JetBrains Mono',monospace;}
+.info-badge.ok{background:#F0FDF6;color:#1A9E60;border:1px solid rgba(26,158,96,0.3);}
+.info-badge.warn{background:#FFF9F0;color:#C07020;border:1px solid rgba(192,112,32,0.3);}
+.info-badge.danger{background:#FFF5F5;color:#C83C3C;border:1px solid rgba(200,60,60,0.3);}
+.info-two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media(max-width:680px){.info-two-col{grid-template-columns:1fr;}.info-kpi-grid{grid-template-columns:1fr;}}
+.info-callout{background:#FFF8E8;border:1px solid #E8D4A0;border-left:4px solid #C8A84B;border-radius:6px;padding:14px 18px;font-size:12.5px;color:#5A4010;line-height:1.6;margin-bottom:16px;}
+.info-callout strong{color:#8A6010;}
+.info-step{display:flex;gap:14px;margin-bottom:14px;}
+.info-step-num{width:26px;height:26px;border-radius:50%;background:#C8A84B;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.info-step-body{font-size:13px;color:#333;line-height:1.6;}
+.info-step-body strong{color:#1A1A1A;font-weight:600;}
+.info-diagram{background:#F9F7F0;border:1px solid #E0D8C0;border-radius:8px;padding:20px 24px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#5A4A28;line-height:1.9;}
+.info-diagram .hi{color:#9A6E1A;font-weight:700;}
+.info-diagram .ok{color:#1A9E60;}
+.info-diagram .warn{color:#C07020;}
+.info-diagram .danger{color:#C83C3C;}
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  body{background:#F9F8F5!important;color:#1A1A1A!important;margin:0!important;padding:0!important;}
+  body::after{display:none!important}
+  #app{display:none!important}
+  #rpt-root{display:block!important;position:static!important;overflow:visible!important;margin:0!important;padding:0!important;}
+  .rpt{width:100%!important;box-shadow:none!important;min-height:0!important;margin:0!important;}
+  .rpt-body-wrap{min-height:0!important;}
+  @page{margin:0 0 8mm 0;size:letter portrait}
+  .rpt-section{page-break-inside:avoid;break-inside:avoid;}
+  .rpt-charts{page-break-inside:avoid;break-inside:avoid;}
+  .rpt-chart-box{page-break-inside:avoid;break-inside:avoid;}
+}
+#rpt-root{display:none;position:fixed;inset:0;z-index:800;overflow-y:auto;background:#F9F8F5;}
+
+/* ── Report shell ── */
+.rpt{
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;
+  background:#F9F8F5;color:#1A1A1A;width:100%;
+  min-height:100vh;display:flex;flex-direction:column;
+}
+.rpt-body-wrap{flex:1;display:flex;flex-direction:column;}
+
+/* ── Cover ── */
+.rpt-cover{
+  background:linear-gradient(135deg,#1C1800 0%,#2A2400 40%,#0D1018 100%);
+  color:#fff;padding:14px 24px 12px;
+  border-bottom:2px solid #C8A84B;position:relative;overflow:hidden;
+}
+.rpt-cover::after{
+  content:'';position:absolute;top:-40px;right:-40px;width:140px;height:140px;border-radius:50%;
+  background:radial-gradient(circle,rgba(200,168,75,0.12) 0%,transparent 70%);pointer-events:none;
+}
+.rpt-cover-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.rpt-brand{display:flex;align-items:center;gap:8px;}
+.rpt-brand-box{
+  width:22px;height:22px;border-radius:3px;
+  background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);
+  display:flex;align-items:center;justify-content:center;
+  font-size:8px;font-weight:700;color:#C8A84B;font-family:'JetBrains Mono',monospace;
+}
+.rpt-brand-name{font-size:12px;font-weight:600;color:#E8D9A0;letter-spacing:-0.01em;}
+.rpt-brand-tag{font-size:7px;color:rgba(200,168,75,0.6);letter-spacing:0.14em;text-transform:uppercase;margin-top:1px;}
+.rpt-doc-meta{text-align:right;}
+.rpt-doc-type{font-size:7px;color:rgba(200,168,75,0.7);letter-spacing:0.18em;text-transform:uppercase;margin-bottom:2px;}
+.rpt-doc-date{font-size:8px;color:rgba(255,255,255,0.45);font-family:monospace;}
+.rpt-cover-title{font-size:20px;font-weight:700;color:#fff;letter-spacing:-0.02em;line-height:1.2;margin-bottom:3px;}
+.rpt-cover-sub{font-size:9px;color:rgba(200,168,75,0.8);font-family:monospace;margin-bottom:8px;}
+.rpt-cover-pills{display:flex;gap:6px;flex-wrap:wrap;}
+.rpt-pill{padding:3px 8px;border-radius:2px;font-size:8px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;border:1px solid;}
+
+/* ── Section ── */
+.rpt-section{margin:0;padding:10px 24px;border-bottom:1px solid #E2DDD4;}
+.rpt-section:last-child{border-bottom:none;}
+.rpt-section-title{
+  font-size:8px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;
+  color:#9A8A6A;margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.rpt-section-title::before{content:'';display:inline-block;width:10px;height:1.5px;background:#C8A84B;border-radius:1px;}
+
+/* ── Verdict ── */
+.rpt-verdict{
+  border-radius:4px;padding:8px 12px;margin-bottom:8px;
+  display:flex;align-items:center;gap:10px;border-left:3px solid;
+}
+.rpt-verdict-icon{font-size:16px;flex-shrink:0;}
+.rpt-verdict-title{font-size:12px;font-weight:700;margin-bottom:2px;}
+.rpt-verdict-sub{font-size:9px;color:#555;line-height:1.4;}
+.rpt-verdict.stable{border-color:#1A9E60;background:#F0FDF6;}
+.rpt-verdict.stable .rpt-verdict-title{color:#1A9E60;}
+.rpt-verdict.drifting{border-color:#C07020;background:#FFF9F0;}
+.rpt-verdict.drifting .rpt-verdict-title{color:#C07020;}
+.rpt-verdict.aggregating{border-color:#C83C3C;background:#FFF5F5;}
+.rpt-verdict.aggregating .rpt-verdict-title{color:#C83C3C;}
+.rpt-verdict.nodata{border-color:#AAA;background:#F5F5F5;}
+.rpt-verdict.nodata .rpt-verdict-title{color:#666;}
+
+/* ── Signal grid ── */
+.rpt-signals{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.rpt-sig{background:#fff;border:1px solid #E2DDD4;border-radius:4px;padding:7px 10px;}
+.rpt-sig-label{font-size:7px;color:#9A8A6A;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;}
+.rpt-sig-val{font-size:14px;font-weight:700;font-family:monospace;line-height:1;margin-bottom:3px;}
+.rpt-sig-note{font-size:7.5px;color:#666;line-height:1.3;}
+.rpt-sig.sig-ok .rpt-sig-val{color:#1A9E60;}
+.rpt-sig.sig-warn .rpt-sig-val{color:#C07020;}
+.rpt-sig.sig-danger .rpt-sig-val{color:#C83C3C;}
+.rpt-sig.sig-info .rpt-sig-val{color:#2A7FC0;}
+.rpt-sig.sig-neutral .rpt-sig-val{color:#555;}
+
+/* ── KPI row ── */
+.rpt-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:0;}
+.rpt-kpi{background:#fff;border:1px solid #E2DDD4;border-radius:4px;padding:7px 10px;text-align:center;}
+.rpt-kpi-label{font-size:7px;color:#9A8A6A;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;}
+.rpt-kpi-val{font-size:15px;font-weight:700;font-family:monospace;color:#1A1A1A;line-height:1;}
+.rpt-kpi-unit{font-size:7px;color:#9A8A6A;margin-top:2px;}
+
+/* ── CoA info table ── */
+.rpt-info{width:100%;border-collapse:collapse;}
+.rpt-info tr{border-bottom:1px solid #EDE9E2;}
+.rpt-info tr:last-child{border-bottom:none;}
+.rpt-info td{padding:4px 0;font-size:9px;vertical-align:top;}
+.rpt-info td:first-child{color:#9A8A6A;width:36%;font-weight:500;letter-spacing:0.02em;}
+.rpt-info td:last-child{color:#1A1A1A;font-family:monospace;}
+
+/* ── Two-col layout for lot info + signals ── */
+.rpt-two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+
+/* ── Scan history table ── */
+.rpt-tbl{width:100%;border-collapse:collapse;font-size:8.5px;}
+.rpt-tbl thead tr{background:#F0EDE6;border-bottom:1px solid #D8D0C0;}
+.rpt-tbl th{padding:4px 6px;text-align:left;font-weight:600;color:#6A5A3A;letter-spacing:0.08em;text-transform:uppercase;font-size:7px;white-space:nowrap;}
+.rpt-tbl td{padding:4px 6px;border-bottom:1px solid #EDE9E2;color:#333;font-family:monospace;white-space:nowrap;}
+.rpt-tbl tbody tr:last-child td{border-bottom:none;}
+.rpt-tbl tbody tr:nth-child(even) td{background:#FDFCFA;}
+
+/* ── Spectrum chart container ── */
+.rpt-charts{display:grid;grid-template-columns:1fr;gap:6px;}
+.rpt-chart-box{background:#fff;border:1px solid #E2DDD4;border-radius:4px;padding:8px 10px;}
+.rpt-chart-box.full-width{grid-column:1/-1;}
+.rpt-chart-title{font-size:7.5px;font-weight:600;color:#9A8A6A;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;}
+
+/* ── Interpretation note ── */
+.rpt-note{
+  background:#FFF8E8;border:1px solid #E8D4A0;border-radius:4px;
+  padding:8px 12px;font-size:9px;color:#5A4010;line-height:1.6;
+}
+.rpt-note p{margin-bottom:4px;}.rpt-note p:last-child{margin-bottom:0;}
+
+/* ── Footer ── */
+.rpt-footer{
+  background:#2A2400;color:rgba(200,168,75,0.5);
+  padding:6px 24px;font-size:7.5px;letter-spacing:0.06em;
+  display:flex;justify-content:space-between;align-items:center;
+}
+
+/* ── Colour helpers ── */
+.c-ok{color:#1A9E60!important;}
+.c-warn{color:#C07020!important;}
+.c-danger{color:#C83C3C!important;}
+.c-gold{color:#9A6E1A!important;}
+.c-blue{color:#2A7FC0!important;}
+.c-neutral{color:#555!important;}
+
+/* ── Conjugate box (in scan modal) ── */
+.conj-box{border:1px solid rgba(74,159,224,0.35);border-radius:var(--radius);background:rgba(74,159,224,0.06);padding:14px 16px;margin-bottom:14px;}
+body.light .conj-box{border-color:rgba(42,127,192,0.3);background:rgba(42,127,192,0.05);}
+.conj-box-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(74,159,224,0.2);}
+.conj-box-icon{font-size:16px;}
+.conj-box-title{font-size:12px;font-weight:600;color:var(--blue);}
+.conj-box-sub{font-size:10.5px;color:var(--text-3);margin-top:1px;}
+
+/* ── Conjugates panel (in lot detail) ── */
+.conj-record{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;}
+.conj-id-badge{background:rgba(74,159,224,0.12);border:1px solid rgba(74,159,224,0.3);border-radius:4px;padding:4px 10px;font-size:10px;font-weight:700;font-family:var(--mono);color:var(--blue);white-space:nowrap;letter-spacing:0.04em;}
+.conj-meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 16px;}
+.conj-meta-item{}
+.conj-meta-k{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;}
+.conj-meta-v{font-size:12px;font-family:var(--mono);color:var(--text);}
+.conj-type-pill{display:inline-block;font-size:10px;padding:2px 7px;border-radius:3px;background:rgba(155,111,224,0.12);border:1px solid rgba(155,111,224,0.3);color:var(--purple);font-weight:600;}
+
+/* ── Conjugates tab ── */
+.conj-page{max-width:1100px;margin:0 auto;padding:24px 20px;}
+.conj-page-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+.conj-page-title{font-size:20px;font-weight:700;color:var(--text);letter-spacing:-0.02em;}
+.conj-page-sub{font-size:12px;color:var(--text-3);font-family:var(--mono);margin-top:2px;}
+.conj-filter-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.conj-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:0;overflow:hidden;transition:border-color 0.15s;}
+.conj-card:hover{border-color:var(--border-hi);}
+.conj-card-top{padding:14px 16px 12px;border-bottom:1px solid var(--border);}
+.conj-card-id-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.conj-card-id{background:rgba(74,159,224,0.12);border:1px solid rgba(74,159,224,0.3);border-radius:4px;padding:3px 10px;font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--blue);letter-spacing:0.06em;}
+.conj-card-date{font-size:11px;color:var(--text-3);font-family:var(--mono);margin-left:auto;}
+.conj-card-lot{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);font-weight:600;cursor:pointer;}
+.conj-card-lot:hover{color:var(--gold);}
+.conj-card-lot-tag{font-size:10px;color:var(--text-3);font-weight:400;}
+.conj-card-body{padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px;}
+.conj-card-field{}
+.conj-card-fk{font-size:9.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;}
+.conj-card-fv{font-size:12px;font-family:var(--mono);color:var(--text);}
+.conj-card-footer{padding:8px 16px;background:var(--surface);display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);}
+.conj-card-kpi{display:flex;align-items:center;gap:5px;font-size:11px;font-family:var(--mono);}
+.conj-card-kpi-k{color:var(--text-3);}
+.conj-card-kpi-v{color:var(--text);font-weight:500;}
+.conj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px;}
+.conj-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;}
+.conj-empty-icon{font-size:36px;margin-bottom:12px;opacity:0.5;}
+.conj-empty-msg{font-size:14px;color:var(--text-3);max-width:320px;line-height:1.6;}
+.conj-search-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+.conj-stats-bar{display:flex;gap:20px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:18px;flex-wrap:wrap;}
+.conj-stat{display:flex;flex-direction:column;gap:1px;}
+.conj-stat-v{font-size:18px;font-weight:700;color:var(--text);font-family:var(--mono);}
+.conj-stat-k{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="rpt-root"></div>
+<script>
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+const THEORETICAL_PEAKS={5:515,10:517,15:520,20:524,30:526,40:530,50:535,60:540,80:553,100:572,150:610,200:650};
+const PARTICLE_SIZES=[5,10,15,20,30,40,50,60,80,100,150,200];
+const SCAN_COLORS=["#C8A84B","#E05C5C","#4A9FE0","#3ECF8E","#9B6FE0","#E0943C","#38BDF8","#F472B6","#A78BFA","#34D399","#FB923C","#60A5FA"];
+
+// ============================================================================
+// ANALYTICS  — nanoComposix-aligned (v3)
+// Key references:
+//   • Peak wavelength drift → colloidal stability / conjugation shift
+//   • FWHM broadening      → aggregation / polydispersity
+//   • Peak-to-trough (P:T) → ratio SPR peak / abs@480 nm (gold QC metric)
+//   • Long-wavelength tail  → mean abs 700–900 nm; elevated = aggregates
+//   • 280 nm protein peak  → free protein in conjugate diluent
+//   • OD % change vs CoA   → concentration / particle loss tracking
+// ============================================================================
+const Analytics={
+  findPeak(data){
+    if(!data||!data.length)return{wavelength:0,absorbance:0};
+    const d=data.filter(p=>p.wl>=400&&p.wl<=800);
+    const s=d.length?d:data;
+    let mx=-Infinity,wi=0,idx=0;
+    s.forEach((p,i)=>{if(p.ab>mx){mx=p.ab;wi=p.wl;idx=i;}});
+    if(idx>0&&idx<s.length-1){
+      const y0=s[idx-1].ab,y1=s[idx].ab,y2=s[idx+1].ab;
+      const dn=2*(2*y1-y0-y2);
+      if(dn!==0){const sh=((y0-y2)*(s[idx+1].wl-s[idx-1].wl))/(2*dn);wi+=sh;mx=y1-(y0-y2)*sh/4;}
+    }
+    return{wavelength:Math.round(wi*100)/100,absorbance:Math.round(mx*10000)/10000};
+  },
+  computeFWHM(data,peak){
+    if(!data||data.length<5)return null;
+    const hm=peak.absorbance/2;
+    const d=data.filter(p=>p.wl>=400&&p.wl<=800);
+    if(d.length<5)return null;
+    let lw=null,rw=null;
+    for(let i=1;i<d.length;i++){if(d[i].wl<=peak.wavelength&&d[i-1].ab<hm&&d[i].ab>=hm){const f=(hm-d[i-1].ab)/(d[i].ab-d[i-1].ab);lw=d[i-1].wl+f*(d[i].wl-d[i-1].wl);}}
+    for(let i=d.length-2;i>=0;i--){if(d[i].wl>=peak.wavelength&&d[i+1].ab<hm&&d[i].ab>=hm){const f=(hm-d[i+1].ab)/(d[i].ab-d[i+1].ab);rw=d[i+1].wl+f*(d[i].wl-d[i+1].wl);}}
+    return(lw!==null&&rw!==null)?Math.round((rw-lw)*100)/100:null;
+  },
+  computeAUC(data){
+    if(!data||data.length<2)return 0;
+    const d=data.filter(p=>p.wl>=400&&p.wl<=800);
+    let a=0;for(let i=1;i<d.length;i++)a+=(d[i].ab+d[i-1].ab)/2*(d[i].wl-d[i-1].wl);
+    return Math.round(a*100)/100;
+  },
+  // Peak-to-trough ratio: SPR peak extinction / absorbance at 480 nm
+  // Gold nanoparticles: higher ratio = sharper, purer SPR = less aggregation
+  computePeakTrough(data,peakAb){
+    if(!data||!peakAb)return null;
+    // interpolate abs at 480 nm
+    const sorted=data.slice().sort((a,b)=>a.wl-b.wl);
+    let ab480=null;
+    for(let i=0;i<sorted.length-1;i++){
+      if(sorted[i].wl<=480&&sorted[i+1].wl>=480){
+        const f=(480-sorted[i].wl)/(sorted[i+1].wl-sorted[i].wl);
+        ab480=sorted[i].ab+f*(sorted[i+1].ab-sorted[i].ab);
+        break;
+      }
+    }
+    if(ab480===null||ab480<=0)return null;
+    return Math.round((peakAb/ab480)*100)/100;
+  },
+  // Long-wavelength tail: mean absorbance 700–900 nm
+  // An elevated baseline here is the primary aggregation signature
+  computeTail(data){
+    if(!data||!data.length)return null;
+    const pts=data.filter(p=>p.wl>=700&&p.wl<=900);
+    if(!pts.length)return null;
+    const mean=pts.reduce((s,p)=>s+p.ab,0)/pts.length;
+    return Math.round(mean*10000)/10000;
+  },
+  // 280 nm absorbance — free protein peak after conjugation
+  computeProtein280(data){
+    if(!data||!data.length)return null;
+    const pts=data.filter(p=>p.wl>=270&&p.wl<=290);
+    if(!pts.length)return null;
+    return Math.round(Math.max(...pts.map(p=>p.ab))*10000)/10000;
+  },
+  // % change in max OD vs the starting material OD on the CoA
+  computeOdPctChange(maxAb,coaOd){
+    if(!coaOd||coaOd<=0)return null;
+    return Math.round(((maxAb-coaOd)/coaOd)*10000)/100; // 2 decimal places
+  },
+  // QC status — now uses 4 signals: drift, FWHM, P:T drop, tail elevation
+  qcStatus(scans,coaOd){
+    const cfg=CFG.get();
+    if(!scans||scans.length<2)return{status:"No Data",color:"var(--text-3)"};
+    // Use corrected analysis when in dilution-corrected mode
+    function an(s){
+      if(typeof S!=='undefined'&&S.absMode==='corrected'){
+        if(s.anC)return s.anC;
+        const d=(s.raw||[]).map(p=>({wl:p.wl,ab:p.ab*(Number(s.dil)||1)}));
+        s.anC=Analytics.analyze(d,(s._lotSize||0),coaOd);
+        return s.anC;
+      }
+      return s.an||null;
+    }
+    const peaks=scans.map(s=>an(s)&&an(s).peakWl||0).filter(p=>p>0);
+    if(peaks.length<2)return{status:"No Data",color:"var(--text-3)"};
+    const drift=Math.abs(peaks[peaks.length-1]-peaks[0]);
+    const fwhms=scans.map(s=>an(s)&&an(s).fwhm).filter(f=>f!=null);
+    const broad=fwhms.length>=2?fwhms[fwhms.length-1]-fwhms[0]:0;
+    // Peak-to-trough: drop > threshold is a warning sign
+    const pts=scans.map(s=>an(s)&&an(s).peakTrough).filter(x=>x!=null);
+    const ptDrop=pts.length>=2?pts[0]-pts[pts.length-1]:0; // drop from first to last
+    // Tail: elevation from first to last scan
+    const tails=scans.map(s=>an(s)&&an(s).tail).filter(x=>x!=null);
+    const tailRise=tails.length>=2?tails[tails.length-1]-tails[0]:0;
+    // Aggregating if any danger threshold exceeded
+    const agg=drift>cfg.driftDanger||broad>cfg.fwhmDanger||ptDrop>cfg.ptDropDanger||tailRise>cfg.tailRiseDanger;
+    // Drifting if any warn threshold exceeded
+    const warn=drift>cfg.driftWarn||broad>cfg.fwhmWarn||ptDrop>cfg.ptDropWarn||tailRise>cfg.tailRiseWarn;
+    if(agg)return{status:"Aggregating",color:"var(--red)",drift,broad,ptDrop,tailRise};
+    if(warn)return{status:"Drifting",color:"var(--amber)",drift,broad,ptDrop,tailRise};
+    return{status:"Stable",color:"var(--green)",drift,broad,ptDrop,tailRise};
+  },
+  analyze(rawData,particleSize,coaOd){
+    const peak=this.findPeak(rawData);
+    const fwhm=this.computeFWHM(rawData,peak);
+    const auc=this.computeAUC(rawData);
+    const peakTrough=this.computePeakTrough(rawData,peak.absorbance);
+    const tail=this.computeTail(rawData);
+    const protein280=this.computeProtein280(rawData);
+    const odPctChange=coaOd?this.computeOdPctChange(peak.absorbance,coaOd):null;
+    const th=THEORETICAL_PEAKS[particleSize]||530;
+    const shift=Math.round(((peak.wavelength-th)/th)*10000)/100;
+    return{peakWl:peak.wavelength,maxAb:peak.absorbance,fwhm,auc,shift,th,peakTrough,tail,protein280,odPctChange};
+  }
+};
+
+// ============================================================================
+// STORAGE
+// ============================================================================
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,9);}
+const LS={
+  get(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch{return fb;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+};
+const DB={
+  getLots(){return LS.get('gt_lots',[]);},
+  saveLots(l){LS.set('gt_lots',l);},
+  getScans(id){return LS.get('gt_s_'+id,[]);},
+  saveScans(id,s){LS.set('gt_s_'+id,s);},
+  addLot(l){const a=this.getLots();a.push(l);this.saveLots(a);},
+  updateLot(id,u){const a=this.getLots(),i=a.findIndex(l=>l.id===id);if(i!==-1){a[i]=Object.assign({},a[i],u);this.saveLots(a);}},
+  deleteLot(id){this.saveLots(this.getLots().filter(l=>l.id!==id));try{localStorage.removeItem('gt_s_'+id);}catch{}},
+  addScan(id,s){const a=this.getScans(id);a.push(s);this.saveScans(id,a);},
+  updateScan(lid,sid,u){const a=this.getScans(lid);const i=a.findIndex(s=>s.id===sid);if(i!==-1){a[i]=Object.assign({},a[i],u);this.saveScans(lid,a);}},
+  deleteScan(lid,sid){this.saveScans(lid,this.getScans(lid).filter(s=>s.id!==sid));}
+};
+
+// ============================================================================
+// FILE PARSER — NanoDrop TSV and generic CSV/TSV
+// ============================================================================
+function parseFile(text){
+  const lines=text.split(/\r?\n/);
+  const meta={sampleName:null,measureDate:null};
+  var first3=lines.slice(0,3).map(function(l){return l.trim();});
+  if(first3[0]&&!first3[0].startsWith('//')&&isNaN(parseFloat(first3[0]))&&!/\d+\/\d+\/\d+/.test(first3[0])){
+    meta.sampleName=first3[0];
+  }
+  if(first3[1]&&/\d+\/\d+\/\d{4}/.test(first3[1])){
+    var m=first3[1].match(/(\d+)\/(\d+)\/(\d{4})/);
+    if(m){meta.measureDate=m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');}
+  }
+  var data=[];
+  for(var i=0;i<lines.length;i++){
+    var t=lines[i].trim();
+    if(!t)continue;
+    if(t[0]==='/'&&t[1]==='/')continue;
+    if(t[0]==='#')continue;
+    var p=t.split(/\t|,|;/);
+    if(p.length<2)continue;
+    var wl=parseFloat(p[0]),ab=parseFloat(p[1]);
+    if(isNaN(wl)||isNaN(ab))continue;
+    if(wl>=190&&wl<=900)data.push({wl:wl,ab:ab});
+  }
+  data.sort(function(a,b){return a.wl-b.wl;});
+  return{data:data,meta:meta};
+}
+
+// ============================================================================
+// DEMO DATA
+// ============================================================================
+// ── Real NanoDrop AuNP spectrum (270–850nm, 0.5 nm steps, single unified array) ──
+// Normalized to SPR peak = 1.0. Authentic shape: UV descent → trough ~450nm → SPR peak → tail.
+// Source: 40nm AuNP citrate buffer, NanoDrop One.
+const AUNP_SHAPE=[0.813622, 0.813094, 0.812038, 0.812038, 0.813094, 0.812038, 0.81151, 0.812038, 0.81415, 0.813622, 0.810982, 0.81151, 0.80887, 0.805702, 0.802006, 0.797782, 0.792503, 0.790919, 0.791447, 0.792503, 0.793031, 0.794615, 0.794087, 0.792503, 0.788279, 0.784055, 0.778775, 0.776135, 0.772967, 0.769799, 0.766631, 0.765048, 0.76452, 0.76452, 0.762936, 0.760824, 0.758712, 0.757128, 0.755016, 0.749736, 0.746568, 0.744456, 0.742344, 0.741288, 0.739176, 0.73812, 0.736536, 0.733369, 0.732313, 0.732841, 0.734424, 0.734424, 0.733897, 0.733369, 0.732313, 0.729673, 0.725977, 0.721753, 0.720697, 0.719113, 0.715417, 0.712777, 0.710665, 0.708553, 0.706441, 0.704329, 0.704329, 0.702218, 0.703273, 0.702746, 0.702746, 0.699578, 0.696938, 0.695354, 0.69377, 0.691658, 0.690074, 0.68585, 0.68585, 0.685322, 0.682154, 0.676874, 0.673178, 0.67265, 0.67265, 0.671595, 0.671067, 0.668955, 0.667899, 0.666843, 0.661563, 0.658395, 0.654699, 0.653643, 0.652059, 0.648891, 0.647835, 0.645723, 0.645723, 0.646251, 0.644139, 0.642027, 0.640444, 0.639916, 0.637804, 0.63622, 0.635692, 0.634108, 0.635164, 0.63358, 0.63094, 0.6283, 0.62566, 0.621436, 0.621436, 0.621436, 0.622492, 0.624076, 0.624076, 0.62302, 0.621436, 0.61774, 0.612988, 0.609293, 0.607181, 0.603485, 0.604541, 0.603485, 0.606125, 0.606125, 0.606653, 0.606653, 0.606125, 0.604541, 0.601373, 0.597149, 0.595565, 0.590813, 0.591341, 0.591869, 0.592397, 0.594509, 0.594509, 0.591869, 0.589229, 0.585005, 0.583421, 0.582365, 0.582365, 0.585005, 0.585005, 0.587117, 0.587117, 0.586589, 0.586061, 0.584477, 0.585005, 0.583949, 0.581837, 0.579725, 0.577614, 0.578141, 0.579725, 0.579725, 0.579197, 0.577614, 0.577086, 0.57603, 0.572862, 0.571278, 0.571806, 0.572334, 0.572862, 0.57075, 0.56811, 0.56811, 0.56811, 0.566526, 0.566526, 0.567582, 0.571278, 0.571806, 0.572334, 0.572334, 0.571278, 0.570222, 0.569166, 0.567582, 0.567054, 0.56811, 0.569166, 0.56811, 0.567582, 0.565998, 0.56283, 0.562302, 0.563358, 0.561246, 0.561246, 0.56283, 0.56283, 0.563358, 0.562302, 0.561774, 0.560718, 0.561246, 0.56019, 0.556494, 0.555966, 0.555966, 0.556494, 0.55755, 0.558606, 0.558606, 0.556494, 0.55491, 0.555438, 0.55227, 0.551214, 0.54963, 0.550158, 0.550686, 0.551214, 0.549102, 0.548046, 0.548574, 0.548574, 0.547518, 0.548046, 0.547518, 0.547518, 0.548046, 0.545935, 0.542767, 0.540655, 0.539599, 0.538015, 0.538015, 0.539071, 0.539599, 0.540655, 0.541183, 0.540655, 0.540127, 0.538543, 0.536431, 0.534847, 0.532735, 0.532207, 0.530623, 0.530095, 0.530095, 0.530095, 0.530095, 0.528511, 0.526399, 0.524815, 0.526399, 0.525871, 0.523231, 0.522175, 0.521119, 0.520063, 0.519535, 0.520591, 0.519535, 0.519007, 0.520063, 0.519535, 0.517951, 0.516895, 0.515839, 0.514784, 0.513728, 0.512672, 0.511088, 0.510032, 0.509504, 0.51056, 0.511616, 0.5132, 0.513728, 0.513728, 0.514256, 0.512672, 0.512672, 0.512144, 0.510032, 0.509504, 0.508448, 0.507392, 0.50528, 0.504224, 0.503696, 0.501584, 0.501056, 0.501056, 0.500528, 0.501056, 0.501056, 0.501056, 0.5, 0.500528, 0.5, 0.498416, 0.496832, 0.49736, 0.496832, 0.496304, 0.495248, 0.49472, 0.495248, 0.495248, 0.495248, 0.493664, 0.49472, 0.495248, 0.494192, 0.494192, 0.49472, 0.49472, 0.495776, 0.49472, 0.494192, 0.493664, 0.493664, 0.493136, 0.49208, 0.492608, 0.493136, 0.49208, 0.491552, 0.491024, 0.491024, 0.491552, 0.48944, 0.48944, 0.488384, 0.48944, 0.48944, 0.487328, 0.487856, 0.488384, 0.489968, 0.489968, 0.488912, 0.48944, 0.488912, 0.491552, 0.49208, 0.491552, 0.491552, 0.491552, 0.49208, 0.491024, 0.489968, 0.48944, 0.488384, 0.488912, 0.487856, 0.486272, 0.484688, 0.484161, 0.482577, 0.483105, 0.484161, 0.483633, 0.484161, 0.485744, 0.487328, 0.488384, 0.48944, 0.491024, 0.490496, 0.49208, 0.492608, 0.491024, 0.48944, 0.488384, 0.488384, 0.488912, 0.48944, 0.491024, 0.490496, 0.491024, 0.491024, 0.48944, 0.48944, 0.490496, 0.491552, 0.493664, 0.49472, 0.495776, 0.494192, 0.493136, 0.493136, 0.492608, 0.493664, 0.49472, 0.496304, 0.496832, 0.498416, 0.498416, 0.498416, 0.501056, 0.503696, 0.505808, 0.506864, 0.50792, 0.508448, 0.508448, 0.508448, 0.50792, 0.508448, 0.511088, 0.512672, 0.514256, 0.515839, 0.517423, 0.519535, 0.521119, 0.522703, 0.524287, 0.524815, 0.525871, 0.526927, 0.529567, 0.532207, 0.533791, 0.535375, 0.537487, 0.540127, 0.541711, 0.543295, 0.545407, 0.547518, 0.551214, 0.554382, 0.55755, 0.560718, 0.563886, 0.566526, 0.569166, 0.573918, 0.578669, 0.582893, 0.586589, 0.590285, 0.595037, 0.599789, 0.602429, 0.605069, 0.609293, 0.614044, 0.619324, 0.624604, 0.63094, 0.638332, 0.644667, 0.651003, 0.655755, 0.659451, 0.664203, 0.670011, 0.673706, 0.679514, 0.686378, 0.691658, 0.697466, 0.704329, 0.711721, 0.717001, 0.722281, 0.730729, 0.737064, 0.744456, 0.750792, 0.754488, 0.760824, 0.767687, 0.772439, 0.778775, 0.785639, 0.792503, 0.800422, 0.808342, 0.815734, 0.822598, 0.831045, 0.838965, 0.845301, 0.853221, 0.858501, 0.864308, 0.86906, 0.874868, 0.880148, 0.887012, 0.894403, 0.901795, 0.908659, 0.914467, 0.919747, 0.926082, 0.930306, 0.93453, 0.939282, 0.943506, 0.95037, 0.957233, 0.961457, 0.966737, 0.970961, 0.975713, 0.978881, 0.980465, 0.981521, 0.982049, 0.986272, 0.987856, 0.988384, 0.990496, 0.993136, 0.997888, 1.0, 1.0, 0.998944, 0.99736, 0.996304, 0.991552, 0.988912, 0.985744, 0.983105, 0.980993, 0.979409, 0.976769, 0.971489, 0.968849, 0.964097, 0.959873, 0.956177, 0.950898, 0.946146, 0.940866, 0.935586, 0.930834, 0.925554, 0.920803, 0.914995, 0.910243, 0.904435, 0.898099, 0.893347, 0.886484, 0.880148, 0.873284, 0.865892, 0.856917, 0.849525, 0.840021, 0.831045, 0.823654, 0.816262, 0.810454, 0.803062, 0.795671, 0.788279, 0.782999, 0.777191, 0.768215, 0.758184, 0.749736, 0.741816, 0.733897, 0.724393, 0.715945, 0.709081, 0.701162, 0.694298, 0.686378, 0.676874, 0.668427, 0.660507, 0.653115, 0.645723, 0.638332, 0.630412, 0.622492, 0.6151, 0.608237, 0.600317, 0.592397, 0.585005, 0.579725, 0.574446, 0.566526, 0.559134, 0.551742, 0.544351, 0.536959, 0.528511, 0.521647, 0.514256, 0.50792, 0.501056, 0.49472, 0.489968, 0.484161, 0.478881, 0.474657, 0.468849, 0.461457, 0.454065, 0.446146, 0.440338, 0.435058, 0.43189, 0.42661, 0.422914, 0.418691, 0.412355, 0.406019, 0.400211, 0.393875, 0.389652, 0.3849, 0.381204, 0.37434, 0.367476, 0.362724, 0.359029, 0.355861, 0.353221, 0.349525, 0.346885, 0.342661, 0.337381, 0.329989, 0.323126, 0.317318, 0.312566, 0.306758, 0.304118, 0.301478, 0.299894, 0.297782, 0.292503, 0.286695, 0.282999, 0.279831, 0.277719, 0.276135, 0.275607, 0.274023, 0.271911, 0.269799, 0.26452, 0.258712, 0.254488, 0.250792, 0.246568, 0.2434, 0.238648, 0.234952, 0.232841, 0.231257, 0.228617, 0.225977, 0.222809, 0.220697, 0.218057, 0.218585, 0.215945, 0.214889, 0.213833, 0.211721, 0.209081, 0.208025, 0.205385, 0.202218, 0.199578, 0.197994, 0.192714, 0.189546, 0.186906, 0.183738, 0.181626, 0.182154, 0.181626, 0.181626, 0.179514, 0.176346, 0.173706, 0.172122, 0.169483, 0.166843, 0.163675, 0.163675, 0.162091, 0.158395, 0.153643, 0.149947, 0.149419, 0.148891, 0.148363, 0.147835, 0.147835, 0.151003, 0.150475, 0.147835, 0.144667, 0.142027, 0.140444, 0.139388, 0.139916, 0.139916, 0.139388, 0.13886, 0.136748, 0.134636, 0.130412, 0.126716, 0.12302, 0.121436, 0.120908, 0.119324, 0.118796, 0.118268, 0.118796, 0.118796, 0.119852, 0.118268, 0.117212, 0.117212, 0.1151, 0.114044, 0.114572, 0.113516, 0.11246, 0.111932, 0.114044, 0.113516, 0.112988, 0.112988, 0.110876, 0.111404, 0.109293, 0.104013, 0.099261, 0.098205, 0.094509, 0.093981, 0.092397, 0.092397, 0.093453, 0.095037, 0.095565, 0.091869, 0.091869, 0.091341, 0.089229, 0.089757, 0.089229, 0.087117, 0.085533, 0.082893, 0.080253, 0.077614, 0.073918, 0.074974, 0.077614, 0.080781, 0.083949, 0.087117, 0.090285, 0.088701, 0.087117, 0.082893, 0.080253, 0.077614, 0.07603, 0.076558, 0.076558, 0.077086, 0.076558, 0.073918, 0.07075, 0.06811, 0.071278, 0.071278, 0.073918, 0.076558, 0.077614, 0.075502, 0.07339, 0.072862, 0.070222, 0.069166, 0.068638, 0.069166, 0.069166, 0.066526, 0.063886, 0.061774, 0.061246, 0.063358, 0.059134, 0.055438, 0.056494, 0.05491, 0.053854, 0.053854, 0.052798, 0.053854, 0.056494, 0.058606, 0.056494, 0.055966, 0.058078, 0.058078, 0.058078, 0.058078, 0.056494, 0.053326, 0.051214, 0.050158, 0.04963, 0.051742, 0.051742, 0.053326, 0.05227, 0.050686, 0.04963, 0.045935, 0.043823, 0.042767, 0.043295, 0.044879, 0.043295, 0.043823, 0.045935, 0.046463, 0.048574, 0.050158, 0.05227, 0.053854, 0.05491, 0.053854, 0.051214, 0.050686, 0.053326, 0.05227, 0.050158, 0.049102, 0.048574, 0.047518, 0.045935, 0.045407, 0.043295, 0.043295, 0.043295, 0.042239, 0.041183, 0.040655, 0.041183, 0.041711, 0.041183, 0.042767, 0.042767, 0.042767, 0.041711, 0.040127, 0.037487, 0.036431, 0.035903, 0.034847, 0.032735, 0.033263, 0.036431, 0.039599, 0.042767, 0.042767, 0.041183, 0.042767, 0.039599, 0.033263, 0.029039, 0.026927, 0.026399, 0.025871, 0.026927, 0.028511, 0.031679, 0.033263, 0.033791, 0.031679, 0.033791, 0.033791, 0.034847, 0.038015, 0.039071, 0.040127, 0.042239, 0.040127, 0.038015, 0.036431, 0.034847, 0.032207, 0.033263, 0.031679, 0.028511, 0.026399, 0.027455, 0.025343, 0.024815, 0.026927, 0.027455, 0.028511, 0.031151, 0.030095, 0.028511, 0.028511, 0.029039, 0.024815, 0.024287, 0.022703, 0.021647, 0.021119, 0.023759, 0.029039, 0.032735, 0.034847, 0.035903, 0.033791, 0.032207, 0.029567, 0.027455, 0.025343, 0.024815, 0.026927, 0.025871, 0.025343, 0.026927, 0.027455, 0.025871, 0.026399, 0.027455, 0.026927, 0.023231, 0.021647, 0.021647, 0.023759, 0.023759, 0.024287, 0.024287, 0.023759, 0.025343, 0.025343, 0.024815, 0.026399, 0.026399, 0.026399, 0.024815, 0.023759, 0.023231, 0.021647, 0.023759, 0.022703, 0.025871, 0.027455, 0.025343, 0.025343, 0.022703, 0.017951, 0.018479, 0.017951, 0.016895, 0.018479, 0.022703, 0.024815, 0.024815, 0.026399, 0.025871, 0.025871, 0.027983, 0.026399, 0.023231, 0.022175, 0.021119, 0.020063, 0.018479, 0.017951, 0.019535, 0.022703, 0.025343, 0.024815, 0.023231, 0.022703, 0.023759, 0.022703, 0.023231, 0.022175, 0.022175, 0.024815, 0.025343, 0.022703, 0.019535, 0.020063, 0.020063, 0.020063, 0.024287, 0.022703, 0.021647, 0.022175, 0.021119, 0.015312, 0.015312, 0.014784, 0.016895, 0.018479, 0.020591, 0.021647, 0.020591, 0.021647, 0.021647, 0.016367, 0.017951, 0.012144, 0.009504, 0.003696, 0.003696, 0.006864, 0.010032, 0.015312, 0.017423, 0.016895, 0.019007, 0.017951, 0.015312, 0.0132, 0.009504, 0.013728, 0.015839, 0.021647, 0.022175, 0.022175, 0.020591, 0.022175, 0.021119, 0.022703, 0.020591, 0.023231, 0.024815, 0.027983, 0.026927, 0.024815, 0.023231, 0.020591, 0.019007, 0.017951, 0.0132, 0.011088, 0.012144, 0.012144, 0.009504, 0.011616, 0.013728, 0.012672, 0.014784, 0.008448, 0.005808, 0.005808, 0.003696, 0.002112, 0.003168, 0.006864, 0.01056, 0.014784, 0.017951, 0.016367, 0.015312, 0.014784, 0.014784, 0.015312, 0.016367, 0.014256, 0.012144, 0.009504, 0.011616, 0.012672, 0.014256, 0.014256, 0.014784, 0.014784, 0.015839, 0.014784, 0.009504, 0.011088, 0.015839, 0.017951, 0.018479, 0.015839, 0.0132, 0.013728, 0.013728, 0.011616, 0.009504, 0.012144, 0.014784, 0.017423, 0.018479, 0.019007, 0.019007, 0.015312, 0.011616, 0.006336, 0.004752, 0.00528, 0.006336, 0.00528, 0.006336, 0.00528, 0.004224, 0.002112, 0.000528, -0.001584, -0.001056, 0.0, 0.001056, 0.002112, 0.00528, 0.011616, 0.013728, 0.016895, 0.018479, 0.019535, 0.019535, 0.020063, 0.016895, 0.013728, 0.009504, 0.012672, 0.010032, 0.009504, 0.011088, 0.013728, 0.013728, 0.014256, 0.012144, 0.007392, 0.003696, 0.004224, 0.00264, 0.001056, 0.004224, 0.005808, -0.001584, -0.000528, -0.003168, -0.008976, -0.006336];
+const AUNP_WL_START=270, AUNP_WL_STEP=0.5, AUNP_REF_PEAK=532;
+
+// Generate authentic NanoDrop-style AuNP spectrum
+// peakWl  : desired SPR peak wavelength (shifts shape horizontally)
+// peakAb  : desired peak absorbance (scales entire spectrum)
+// fwhm    : desired full-width at half-maximum in nm
+// tailMult: >1 elevates long-λ tail (aggregation simulation)
+// noiseAmp: per-point Gaussian noise amplitude
+function mkNanoDrop(peakWl, peakAb, fwhm, tailMult, noiseAmp) {
+  tailMult = tailMult || 1;
+  noiseAmp = noiseAmp || 0.003;
+  const refFwhm = 100; // approximate FWHM of reference shape
+  const fwhmScale = fwhm / refFwhm;
+  const raw = [];
+  const n = AUNP_SHAPE.length;
+  for (let i = 0; i < n; i++) {
+    const wl = AUNP_WL_START + i * AUNP_WL_STEP;
+    // Map this wavelength back into the reference shape, accounting for peak shift & FWHM scaling
+    const shiftedWl = AUNP_REF_PEAK + (wl - peakWl) / fwhmScale;
+    const si = (shiftedWl - AUNP_WL_START) / AUNP_WL_STEP;
+    const si0 = Math.floor(si), si1 = si0 + 1;
+    const sv = si0 < 0 ? AUNP_SHAPE[0] :
+               si1 >= n ? AUNP_SHAPE[n-1] :
+               AUNP_SHAPE[si0] + (si - si0) * (AUNP_SHAPE[si1] - AUNP_SHAPE[si0]);
+    // Tail elevation for aggregation (ramps in above 650nm)
+    const tailF = wl > 650 ? 1 + (tailMult - 1) * Math.min(1, (wl - 650) / 200) : 1;
+    const noise = (Math.random() - 0.5) * noiseAmp;
+    raw.push({wl: Math.round(wl * 10) / 10, ab: Math.round(Math.max(0, sv * peakAb * tailF + noise) * 10000) / 10000});
+  }
+  return raw;
+}
+
+function seedDemo() {
+  if (DB.getLots().length > 0) return;
+
+  const l1 = {id:uid(),supplier:'BBI Solutions',lotNumber:'GC40-2024-0891',catalog:'GC40',size:40,od:1.0,
+    buffer:'0.01% Citrate buffer, pH 7.0',received:'2024-09-15',expires:'2026-09-15',
+    storage:'4\u00b0C, dark',notes:'Standard 40nm lot for LFA conjugation. Passed incoming QC.',created:Date.now()};
+  const l2 = {id:uid(),supplier:'nanoComposix',lotNumber:'NC50-2024-1102',catalog:'OCNP50',size:50,od:1.2,
+    buffer:'Citrate stabilized, pH 6.8',received:'2024-10-01',expires:'2026-10-01',
+    storage:'4\u00b0C, dark',notes:'50nm lot showing early aggregation signs. Monitor closely.',created:Date.now()-86400000};
+  const l3 = {id:uid(),supplier:'Arista Biologicals',lotNumber:'AB40-2024-0342',catalog:'CGN-40',size:40,od:1.0,
+    buffer:'0.01% Citrate, pH 7.2',received:'2024-06-01',expires:'2026-06-01',
+    storage:'4\u00b0C, dark',notes:'QUARANTINE — severe aggregation detected. Do not use.',created:Date.now()-172800000};
+  const l4 = {id:uid(),supplier:'BBI Solutions',lotNumber:'GC40-2024-1255',catalog:'GC40',size:40,od:1.0,
+    buffer:'0.01% Citrate buffer, pH 7.0',received:'2024-11-01',expires:'2026-11-01',
+    storage:'4\u00b0C, dark',notes:'Conjugation lot. Pre/post-conjugation scans + dilution series.',created:Date.now()-259200000};
+  DB.addLot(l1); DB.addLot(l2); DB.addLot(l3); DB.addLot(l4);
+
+  // LOT 1 — STABLE (mix of 1×, 5×, 10× to demo dilution correction)
+  [
+    {date:'2024-09-16',op:'JK',dil:1, peakWl:529.8,peakAb:1.020,fwhm:98, tailMult:1.00,notes:'Incoming QC'},
+    {date:'2024-10-15',op:'JK',dil:5, peakWl:530.0,peakAb:0.204,fwhm:98, tailMult:1.00,notes:'1-month stability, 5× diluted in DI water'},
+    {date:'2024-11-15',op:'ML',dil:1, peakWl:530.1,peakAb:1.005,fwhm:98, tailMult:1.00,notes:'2-month stability check'},
+    {date:'2024-12-15',op:'ML',dil:10,peakWl:530.2,peakAb:0.101,fwhm:99, tailMult:1.00,notes:'3-month, 10× diluted in PBS'},
+    {date:'2025-01-15',op:'JK',dil:1, peakWl:530.3,peakAb:0.998,fwhm:99, tailMult:1.00,notes:'4-month stability check'},
+  ].forEach(s => {
+    const raw = mkNanoDrop(s.peakWl, s.peakAb, s.fwhm, s.tailMult, 0.003);
+    DB.addScan(l1.id, {id:uid(),date:s.date,op:s.op,dil:s.dil,notes:s.notes,
+      diluent:'DI water',scanType:'stability',raw,
+      an:Analytics.analyze(raw,40,1.0),
+      anC:Analytics.analyze(raw.map(p=>{return{wl:p.wl,ab:p.ab*s.dil}})  ,40,1.0),
+      created:new Date(s.date).getTime()});
+  });
+
+  // LOT 2 — DRIFTING (progressive red-shift + broadening)
+  [
+    {date:'2024-10-02',op:'ML',peakWl:535.0,peakAb:1.20,fwhm:105,tailMult:1.05,notes:'Incoming QC'},
+    {date:'2024-11-02',op:'ML',peakWl:536.5,peakAb:1.17,fwhm:108,tailMult:1.12,notes:'1-month stability'},
+    {date:'2024-12-02',op:'JK',peakWl:538.2,peakAb:1.14,fwhm:113,tailMult:1.22,notes:'2-month — drift noted'},
+    {date:'2025-01-02',op:'JK',peakWl:539.8,peakAb:1.10,fwhm:118,tailMult:1.35,notes:'3-month — drifting confirmed'},
+  ].forEach(s => {
+    const raw = mkNanoDrop(s.peakWl, s.peakAb, s.fwhm, s.tailMult, 0.004);
+    DB.addScan(l2.id, {id:uid(),date:s.date,op:s.op,dil:1,notes:s.notes,
+      diluent:'DI water',scanType:'stability',raw,
+      an:Analytics.analyze(raw,50,1.2),anC:Analytics.analyze(raw,50,1.2),
+      created:new Date(s.date).getTime()});
+  });
+
+  // LOT 3 — AGGREGATING (severe progressive degradation)
+  [
+    {date:'2024-06-02',op:'JK',peakWl:529.5,peakAb:1.01,fwhm:99, tailMult:1.00,notes:'Incoming QC — pass'},
+    {date:'2024-07-02',op:'ML',peakWl:531.0,peakAb:0.99,fwhm:102,tailMult:1.08,notes:'1-month — slight broadening'},
+    {date:'2024-08-02',op:'JK',peakWl:534.5,peakAb:0.95,fwhm:110,tailMult:1.30,notes:'2-month — drift + tail rise'},
+    {date:'2024-09-02',op:'ML',peakWl:539.0,peakAb:0.88,fwhm:122,tailMult:1.65,notes:'3-month — aggregating'},
+    {date:'2024-10-02',op:'JK',peakWl:545.0,peakAb:0.78,fwhm:138,tailMult:2.10,notes:'4-month — severe. QUARANTINE.'},
+  ].forEach(s => {
+    const raw = mkNanoDrop(s.peakWl, s.peakAb, s.fwhm, s.tailMult, 0.004);
+    DB.addScan(l3.id, {id:uid(),date:s.date,op:s.op,dil:1,notes:s.notes,
+      diluent:'DI water',scanType:'stability',raw,
+      an:Analytics.analyze(raw,40,1.0),anC:Analytics.analyze(raw,40,1.0),
+      created:new Date(s.date).getTime()});
+  });
+
+  // LOT 4 — PRE/POST-CONJUGATION + dilution demo
+  (function() {
+    const rPre = mkNanoDrop(529.8,1.03,97,1.0,0.003);
+    DB.addScan(l4.id, {id:uid(),date:'2024-11-05',op:'JK',dil:1,
+      notes:'Pre-conjugation baseline',diluent:'DI water',scanType:'pre-conjugation',raw:rPre,
+      an:Analytics.analyze(rPre,40,1.0),anC:Analytics.analyze(rPre,40,1.0),
+      created:new Date('2024-11-05').getTime()});
+    // Post-conj at 5× dilution — antibody coating raises 280nm signal
+    const rPost5 = mkNanoDrop(532.5,0.194,101,1.04,0.003);
+    const rPostCorr = mkNanoDrop(532.5,0.97,101,1.04,0.003); // corrected
+    DB.addScan(l4.id, {id:uid(),date:'2024-11-06',op:'JK',dil:5,
+      notes:'Post-conjugation anti-CRP IgG — 5× diluted in PBS',diluent:'PBS',scanType:'post-conjugation',raw:rPost5,
+      an:Analytics.analyze(rPost5,40,1.0),anC:Analytics.analyze(rPostCorr,40,1.0),
+      created:new Date('2024-11-06').getTime()});
+    const rStab = mkNanoDrop(532.8,0.96,102,1.05,0.003);
+    DB.addScan(l4.id, {id:uid(),date:'2024-12-06',op:'ML',dil:1,
+      notes:'1-month post-conjugation stability',diluent:'PBS',scanType:'stability',raw:rStab,
+      an:Analytics.analyze(rStab,40,1.0),anC:Analytics.analyze(rStab,40,1.0),
+      created:new Date('2024-12-06').getTime()});
+  })();
+}
+
+// ============================================================================
+// SETTINGS
+// ============================================================================
+const SETTINGS_DEFAULTS={
+  driftWarn:3,        // nm — peak drift before "Drifting"
+  driftDanger:5,      // nm — peak drift before "Aggregating"
+  fwhmWarn:8,         // nm — FWHM broadening before "Drifting"
+  fwhmDanger:15,      // nm — FWHM broadening before "Aggregating"
+  ptDropWarn:0.5,     // Peak-to-trough ratio drop before "Drifting"
+  ptDropDanger:1.0,   // Peak-to-trough ratio drop before "Aggregating"
+  tailRiseWarn:0.005, // Long-wavelength tail rise (AU) before "Drifting"
+  tailRiseDanger:0.02,// Long-wavelength tail rise (AU) before "Aggregating"
+  expiryWarnDays:90,  // days before expiry to show warning
+  theme:'dark',       // 'dark' | 'light'
+};
+const CFG={
+  get(){return Object.assign({},SETTINGS_DEFAULTS,LS.get('gt_cfg',{}));},
+  set(patch){LS.set('gt_cfg',Object.assign(CFG.get(),patch));}
+};
+
+// Apply theme on load
+(function applyTheme(){
+  const cfg=CFG.get();
+  if(cfg.theme==='light') document.body.classList.add('light');
+})();
+
+// ============================================================================
+// DOM HELPERS
+// ============================================================================
+function el(tag,attrs){
+  const e=document.createElement(tag);
+  if(attrs){Object.keys(attrs).forEach(k=>{
+    const v=attrs[k];
+    if(k==='class')e.className=v;
+    else if(k==='style'&&typeof v==='object')Object.assign(e.style,v);
+    else if(k.startsWith('on'))e.addEventListener(k.slice(2).toLowerCase(),v);
+    else e.setAttribute(k,v);
+  });}
+  for(let i=2;i<arguments.length;i++){
+    const c=arguments[i];
+    if(c==null||c===false)continue;
+    if(Array.isArray(c))c.forEach(cc=>{if(cc!=null&&cc!==false)e.appendChild(typeof cc==='string'||typeof cc==='number'?document.createTextNode(String(cc)):cc);});
+    else e.appendChild(typeof c==='string'||typeof c==='number'?document.createTextNode(String(c)):c);
+  }
+  return e;
+}
+// Format YYYY-MM-DD → MM/DD/YY for display
+function fmtDate(d){
+  if(!d)return'—';
+  const m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m)return d;
+  return m[2]+'/'+m[3]+'/'+m[1].slice(2);
+}
+
+function svgEl(tag,attrs){
+  const e=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  if(attrs)Object.keys(attrs).forEach(k=>e.setAttribute(k,attrs[k]));
+  for(let i=2;i<arguments.length;i++){const c=arguments[i];if(c!=null&&c!==false)e.appendChild(typeof c==='string'?document.createTextNode(c):c);}
+  return e;
+}
+function mkBadge(text,color){
+  return el('span',{class:'badge',style:{color,background:color.startsWith('var')?'rgba(255,255,255,0.06)':color+'18',border:'1px solid '+color.replace('var(--','rgba(').replace(')',',.25)').replace('--','')}},text);
+}
+function makePath(pts){
+  if(!pts.length)return'';
+  return pts.map((p,i)=>(i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+}
+function niceRange(mn,mx){
+  const r=mx-mn||1;const s=Math.pow(10,Math.floor(Math.log10(r/4)));
+  return{min:Math.floor(mn/s)*s,max:Math.ceil(mx/s)*s,step:s};
+}
+function linTicks(mn,mx){
+  const r=niceRange(mn,mx);const t=[];let v=r.min;
+  while(v<=r.max+r.step*0.01){t.push(Math.round(v*1000)/1000);v+=r.step;}
+  return t;
+}
+
+// ============================================================================
+// STATE
+// ============================================================================
+const S={view:'dashboard',lot:null,modal:null,search:'',compare:[],compareSearch:'',absMode:'measured',editScan:null};
+function setState(p){Object.assign(S,p);render();}
+
+function getAn(scan,coaOd){
+  // Backward compatible: compute corrected analysis on-the-fly if missing
+  if(!scan) return null;
+  if(S.absMode==='corrected'){
+    if(scan.anC) return scan.anC;
+    const d=(scan.raw||[]).map(p=>({wl:p.wl,ab:p.ab*(Number(scan.dil)||1)}));
+    scan.anC=Analytics.analyze(d,(scan._lotSize||0)||0,coaOd);
+    return scan.anC;
+  }
+  return scan.an||null;
+}
+function getRaw(scan){
+  if(!scan) return [];
+  if(S.absMode==='corrected'){
+    const df=Number(scan.dil)||1;
+    return (scan.raw||[]).map(p=>({wl:p.wl,ab:p.ab*df}));
+  }
+  return scan.raw||[];
+}
+function buildAbsToggle(){
+  const mk=(mode,label)=>el('button',{class:'chip'+(S.absMode===mode?' on':''),onClick:()=>setState({absMode:mode})},label);
+  return el('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap'}},
+    mk('measured','Measured Abs'),
+    mk('corrected','Dilution-corrected Abs')
+  );
+}
+
+function render(){
+  const activeEl=document.activeElement;
+  const focusId=activeEl&&activeEl.dataset&&activeEl.dataset.focusid?activeEl.dataset.focusid:null;
+  const focusCls=activeEl&&activeEl.classList.contains('search')?'search':null;
+  const caretPos=focusCls?activeEl.selectionStart:null;
+
+  const app=document.getElementById('app');
+  app.innerHTML='';
+  app.appendChild(buildHdr());
+  if(S.view==='dashboard')app.appendChild(buildDash());
+  else if(S.view==='detail')app.appendChild(buildDetail());
+  else if(S.view==='compare')app.appendChild(buildCompare());
+  else if(S.view==='conjugates')app.appendChild(buildConjugates());
+  else if(S.view==='settings')app.appendChild(buildSettings());
+  else if(S.view==='info')app.appendChild(buildInfo());
+  if(S.modal==='scan')app.appendChild(buildScanModal());
+  else if(S.modal==='paste')app.appendChild(buildPasteModal());
+  else if(S.modal==='edit')app.appendChild(buildEditModal());
+  else if(S.modal==='create')app.appendChild(buildCreateModal());
+  else if(S.modal==='editScan')app.appendChild(buildEditScanModal());
+
+  if(focusCls){
+    requestAnimationFrame(()=>{
+      const el=document.querySelector('.'+focusCls);
+      if(el){el.focus();try{if(caretPos!=null)el.setSelectionRange(caretPos,caretPos);}catch{}}
+    });
+  }
+}
+
+// ============================================================================
+// HEADER
+// ============================================================================
+function buildHdr(){
+  const cfg=CFG.get();
+  const isLight=cfg.theme==='light';
+  function toggleTheme(){
+    const newTheme=isLight?'dark':'light';
+    CFG.set({theme:newTheme});
+    document.body.classList.toggle('light',newTheme==='light');
+    render();
+  }
+  return el('header',{class:'hdr'},
+    el('div',{class:'hdr-left'},
+      el('div',{class:'brand'},
+        el('div',{class:'brand-icon'},'Au'),
+        el('div',{},
+          el('div',{class:'brand-text'},'AuTrack'),
+          el('div',{class:'brand-tag'},'Nanoparticle QC')
+        )
+      ),
+      el('div',{class:'hdr-sep'}),
+      el('nav',{class:'nav'},
+        mkNb('dashboard','Dashboard'),
+        mkNb('compare','Compare'),
+        mkNb('conjugates','Conjugates'),
+        mkNb('settings','Settings'),
+        mkNb('info','Info')
+      )
+    ),
+    el('div',{class:'hdr-right'},
+      el('button',{class:'theme-btn',title:isLight?'Switch to dark mode':'Switch to light mode',onClick:toggleTheme},isLight?'☀':'🌙'),
+      el('button',{class:'btn-reset',onClick:resetDemo},'Reset Demo')
+    )
+  );
+}
+function mkNb(key,label){
+  return el('button',{class:'nb'+(S.view===key?' on':''),onClick:()=>setState({view:key})},label);
+}
+function resetDemo(){
+  if(!confirm('Reset all data and restore demo lots?'))return;
+  try{Object.keys(localStorage).filter(k=>k.startsWith('gt_')).forEach(k=>localStorage.removeItem(k));}catch{}
+  seedDemo();setState({view:'dashboard',lot:null,modal:null});
+}
+
+// ============================================================================
+// EXPIRY HELPERS
+// ============================================================================
+function expiryInfo(dateStr){
+  if(!dateStr)return{status:'unknown',days:null,label:'—'};
+  const now=new Date();now.setHours(0,0,0,0);
+  const exp=new Date(dateStr);exp.setHours(0,0,0,0);
+  const days=Math.round((exp-now)/(1000*86400));
+  const cfg=CFG.get();
+  if(days<0)return{status:'expired',days,label:'Expired '+Math.abs(days)+'d ago'};
+  if(days<=cfg.expiryWarnDays)return{status:'soon',days,label:'Expires in '+days+'d'};
+  return{status:'ok',days,label:'Expires in '+days+'d'};
+}
+function buildExpiryPill(dateStr){
+  const info=expiryInfo(dateStr);
+  if(info.status==='unknown')return el('span',{},info.label);
+  return el('span',{class:'expiry-pill '+info.status},info.label);
+}
+
+// ============================================================================
+// DASHBOARD
+// ============================================================================
+function buildDash(){
+  const lots=DB.getLots();
+  const totalScans=lots.reduce((a,l)=>a+DB.getScans(l.id).length,0);
+  const sums=lots.map(l=>{
+    const sc=DB.getScans(l.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
+    return Object.assign({},l,{cnt:sc.length,qc:Analytics.qcStatus(sc),last:sc[0]});
+  });
+  const stable=sums.filter(l=>l.qc.status==='Stable').length;
+  const drift=sums.filter(l=>l.qc.status==='Drifting').length;
+  const agg=sums.filter(l=>l.qc.status==='Aggregating').length;
+  const q=S.search.toLowerCase();
+  const filtered=q?sums.filter(l=>(l.lotNumber||'').toLowerCase().includes(q)||(l.supplier||'').toLowerCase().includes(q)||String(l.size).includes(q)):sums;
+
+  // Build expiry alerts
+  const alertNodes=[];
+  const expired=sums.filter(l=>expiryInfo(l.expires).status==='expired');
+  const expiringSoon=sums.filter(l=>expiryInfo(l.expires).status==='soon');
+  if(expired.length){
+    alertNodes.push(el('div',{class:'alert-bar danger'},
+      el('div',{class:'alert-bar-stripe'}),
+      el('div',{class:'alert-bar-body'},
+        el('div',{class:'alert-bar-title'},'⚠ '+expired.length+' lot'+(expired.length>1?'s':'')+' expired'),
+        el('div',{class:'alert-bar-sub'},expired.map(l=>l.lotNumber).join(' · '))
+      )
+    ));
+  }
+  if(expiringSoon.length){
+    alertNodes.push(el('div',{class:'alert-bar warn'},
+      el('div',{class:'alert-bar-stripe'}),
+      el('div',{class:'alert-bar-body'},
+        el('div',{class:'alert-bar-title'},'🕐 '+expiringSoon.length+' lot'+(expiringSoon.length>1?'s':'')+' expiring soon'),
+        el('div',{class:'alert-bar-sub'},expiringSoon.map(l=>l.lotNumber+' ('+expiryInfo(l.expires).label+')').join(' · '))
+      )
+    ));
+  }
+  if(agg){
+    alertNodes.push(el('div',{class:'alert-bar danger'},
+      el('div',{class:'alert-bar-stripe'}),
+      el('div',{class:'alert-bar-body'},
+        el('div',{class:'alert-bar-title'},'🔴 '+agg+' lot'+(agg>1?'s':'')+' showing aggregation'),
+        el('div',{class:'alert-bar-sub'},sums.filter(l=>l.qc.status==='Aggregating').map(l=>l.lotNumber).join(' · '))
+      )
+    ));
+  }
+
+  const tbody=el('tbody',{});
+  if(!filtered.length){
+    tbody.appendChild(el('tr',{},el('td',{colspan:'11'},el('div',{class:'empty'},el('div',{class:'empty-icon'},'🔬'),el('div',{class:'empty-msg'},q?'No lots match your search':'No lots registered yet')))));
+  } else {
+    filtered.forEach(l=>{
+      const lastAn=l.last?getAn(l.last):null;
+      const row=el('tr',{class:'tr-link'},
+        el('td',{style:{fontFamily:'var(--mono)',color:'var(--gold)',fontWeight:'500'}},l.lotNumber),
+        el('td',{},l.supplier),
+        el('td',{style:{fontFamily:'var(--mono)'}},l.size+' nm'),
+        el('td',{style:{fontFamily:'var(--mono)'}},l.od),
+        el('td',{style:{fontFamily:'var(--mono)',fontSize:'12px'}},fmtDate(l.received)),
+        el('td',{},buildExpiryPill(l.expires)),
+        el('td',{style:{fontFamily:'var(--mono)'}},l.cnt),
+        el('td',{style:{fontFamily:'var(--mono)'}},lastAn&&lastAn.peakWl?lastAn.peakWl+' nm':'—'),
+        el('td',{},mkBadge(l.qc.status,l.qc.color)),
+        el('td',{},el('button',{class:'btn btn-ghost btn-sm',onClick:e=>{e.stopPropagation();setState({lot:l.id,modal:'scan'});}},'+\u202FScan')),
+        el('td',{},el('button',{class:'btn btn-del btn-sm',onClick:e=>{e.stopPropagation();if(confirm('Delete lot '+l.lotNumber+'? This cannot be undone.')){DB.deleteLot(l.id);render();}}},'Delete'))
+      );
+      row.addEventListener('click',()=>setState({lot:l.id,view:'detail'}));
+      tbody.appendChild(row);
+    });
+  }
+
+  return el('div',{class:'page'},
+    el('div',{class:'stats'},
+      ...[{v:lots.length,l:'Lots',c:'var(--gold)'},{v:totalScans,l:'Scans',c:'var(--blue)'},{v:stable,l:'Stable',c:'var(--green)'},{v:drift,l:'Drifting',c:'var(--amber)'},{v:agg,l:'Aggregating',c:'var(--red)'}].map(m=>
+        el('div',{class:'stat',style:{color:m.c}},el('div',{class:'stat-val'},m.v),el('div',{class:'stat-lbl'},m.l))
+      )
+    ),
+    ...alertNodes,
+    el('div',{class:'pnl'},
+      el('div',{class:'pnl-head'},
+        el('span',{class:'pnl-title'},'Registered Lots'),
+        el('div',{style:{display:'flex',gap:'8px',alignItems:'center'}},
+          el('input',{class:'search',placeholder:'Search lots…',value:S.search,onInput:e=>setState({search:e.target.value})}),
+          el('button',{class:'btn btn-primary',onClick:()=>setState({modal:'create'})},'+ New Lot')
+        )
+      ),
+      el('div',{class:'tbl-wrap'},
+        el('table',{},
+          el('thead',{},el('tr',{},...'Lot Number,Supplier,Size,OD,Received,Expiry,Scans,λ max (last),Status,,'.split(',').map(h=>el('th',{},h)))),
+          tbody
+        )
+      )
+    )
+  );
+}
+
+// ============================================================================
+// LOT DETAIL
+// ============================================================================
+function buildDetail(){
+  const lot=DB.getLots().find(l=>l.id===S.lot);
+  if(!lot)return buildDash();
+  const scans=DB.getScans(lot.id).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  scans.forEach(s=>{s._lotSize=lot.size;});
+  const qc=Analytics.qcStatus(scans,lot.od);
+  const last=scans[scans.length-1];
+  const aLast=last?getAn(last,lot.od):null;
+  const th=THEORETICAL_PEAKS[lot.size]||530;
+
+  function exportCSV(){
+    let csv='Date,Operator,ScanType,Diluent,Dilution,Peak_nm,MaxAbs_measured_AU,MaxAbs_corrected_AU,OD_pct_change,FWHM_nm,AUC_measured,AUC_corrected,PeakTrough,Tail_700-900nm,Protein280nm,Shift_pct\n';
+    scans.forEach(s=>{
+      const am=s.an||{};const ac=s.anC||{};
+      csv+=`${s.date},${s.op||''},${s.scanType||'stability'},${s.diluent||''},${s.dil},${am.peakWl||''},${am.maxAb||''},${ac.maxAb||''},${am.odPctChange!=null?am.odPctChange:''},${am.fwhm||''},${am.auc||''},${ac.auc||''},${am.peakTrough||''},${am.tail||''},${am.protein280||''},${am.shift||''}\n`;
+    });
+    const b=new Blob([csv],{type:'text/csv'});const u=URL.createObjectURL(b);
+    const a=document.createElement('a');a.href=u;a.download=lot.lotNumber+'_qc.csv';a.click();URL.revokeObjectURL(u);
+  }
+
+  // ── KPI bar ──────────────────────────────────────────────────────────────
+  function odPctColor(v){if(v==null)return'var(--text-2)';const a=Math.abs(v);return a>20?'var(--red)':a>10?'var(--amber)':'var(--green)';}
+  function ptColor(v){if(!v)return'var(--text-2)';return v>=2.5?'var(--green)':v>=1.5?'var(--amber)':'var(--red)';}
+  function tailColor(v){if(v==null)return'var(--text-2)';return v<0.01?'var(--green)':v<0.03?'var(--amber)':'var(--red)';}
+  function p280Color(v){if(v==null)return'var(--text-2)';return v>0.1?'var(--blue)':'var(--text-2)';}
+
+  const kpis=last&&aLast?[
+    {v:aLast.peakWl+' nm',k:'λ max',c:'var(--gold)',tt:'SPR peak wavelength'},
+    {v:aLast.maxAb+' AU',k:'Abs max (OD)',c:'var(--blue)',tt:'Maximum absorbance (peak OD)'},
+    {v:aLast.odPctChange!=null?(aLast.odPctChange>0?'+':'')+aLast.odPctChange+'%':'—',k:'ΔOD vs CoA',c:odPctColor(aLast.odPctChange),tt:'% change in peak OD vs starting material on CoA'},
+    {v:aLast.fwhm?aLast.fwhm+' nm':'—',k:'FWHM',c:'var(--purple)',tt:'Full-width half-maximum — broadening indicates aggregation'},
+    {v:aLast.peakTrough?aLast.peakTrough.toFixed(2):'—',k:'Peak:Trough',c:ptColor(aLast.peakTrough),tt:'SPR peak / abs@480nm — drops with aggregation (gold standard: ≥2.5)'},
+    {v:aLast.tail!=null?aLast.tail.toFixed(4)+' AU':'—',k:'700–900nm Tail',c:tailColor(aLast.tail),tt:'Mean absorbance 700–900nm — elevated baseline = aggregate scatter'},
+    {v:aLast.protein280!=null?aLast.protein280.toFixed(4)+' AU':'—',k:'280nm Protein',c:p280Color(aLast.protein280),tt:'Abs @ 280nm — peak indicates free protein in conjugate buffer'},
+    {v:qc.drift!=null?qc.drift.toFixed(1)+' nm':'—',k:'Peak drift',c:qc.color,tt:'Total peak shift across all scans'},
+    {v:scans.length,k:'Scans',c:'var(--text-2)',tt:'Total QC checks recorded'},
+  ]:[];
+
+  // ── Scan history table ───────────────────────────────────────────────────
+  const scanRows=el('tbody',{});
+  scans.forEach(s=>{
+    const a=getAn(s,lot.od)||{};
+    const shColor=Math.abs(a.shift||0)>1?'var(--amber)':'var(--green)';
+    const ptC=ptColor(a.peakTrough);
+    const tailC=tailColor(a.tail);
+    const odC=odPctColor(a.odPctChange);
+    const stBadge=s.scanType==='post-conjugation'?el('span',{class:'badge',style:{color:'var(--blue)',background:'rgba(74,159,224,0.12)',border:'1px solid rgba(74,159,224,0.25)',fontSize:'10px'}},'post-conj'):
+                  s.scanType==='pre-conjugation'?el('span',{class:'badge',style:{color:'var(--purple)',background:'rgba(155,111,224,0.12)',border:'1px solid rgba(155,111,224,0.25)',fontSize:'10px'}},'pre-conj'):
+                  el('span',{class:'badge',style:{color:'var(--text-3)',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',fontSize:'10px'}},'stability');
+    scanRows.appendChild(el('tr',{},
+      el('td',{style:{fontFamily:'var(--mono)',fontSize:'12px'}},fmtDate(s.date)),
+      el('td',{style:{fontFamily:'var(--mono)'}},s.op||'—'),
+      el('td',{},
+        el('div',{style:{display:'flex',flexDirection:'column',gap:'3px'}},
+          stBadge,
+          s.conj?el('button',{
+            style:{fontSize:'10px',fontFamily:'var(--mono)',color:'var(--blue)',cursor:'pointer',background:'none',border:'none',padding:'0',textAlign:'left',display:'flex',alignItems:'center',gap:'4px'},
+            title:'Open conjugate record',
+            onClick:e=>{e.stopPropagation();setState({view:'conjugates',openConj:s.conj.id});}
+          },'🔗 '+s.conj.id.slice(0,22)+(s.conj.id.length>22?'…':'')):null
+        )
+      ),
+      el('td',{style:{fontSize:'12px',color:'var(--text-2)'}},s.diluent||'—'),
+      
+      el('td',{style:{fontFamily:'var(--mono)'}},s.dil+'×'),
+      el('td',{style:{fontFamily:'var(--mono)',color:'var(--gold)',fontWeight:'500'}},a.peakWl||'—'),
+      el('td',{style:{fontFamily:'var(--mono)'}},a.maxAb||'—'),
+      el('td',{style:{fontFamily:'var(--mono)',color:odC}},a.odPctChange!=null?(a.odPctChange>0?'+':'')+a.odPctChange+'%':'—'),
+      el('td',{style:{fontFamily:'var(--mono)'}},a.fwhm||'—'),
+      el('td',{style:{fontFamily:'var(--mono)',color:ptC,fontWeight:'500'}},a.peakTrough?a.peakTrough.toFixed(2):'—'),
+      el('td',{style:{fontFamily:'var(--mono)',color:tailC}},a.tail!=null?a.tail.toFixed(4):'—'),
+      el('td',{style:{fontFamily:'var(--mono)',color:'var(--blue)',fontSize:'11px'}},a.protein280!=null?a.protein280.toFixed(4):'—'),
+      el('td',{style:{fontFamily:'var(--mono)',color:shColor}},a.shift!=null?(a.shift>0?'+':'')+a.shift+'%':'—'),
+      el('td',{style:{fontSize:'11px',color:'var(--text-3)',maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},s.notes||'—'),
+      el('td',{style:{whiteSpace:'nowrap'}},
+        el('button',{class:'btn btn-ghost btn-sm',style:{marginRight:'4px'},onClick:()=>setState({modal:'editScan',editScan:{lid:lot.id,sid:s.id}})},'✏'),
+        el('button',{class:'btn btn-del btn-sm',onClick:()=>{if(confirm('Delete this scan?')){DB.deleteScan(lot.id,s.id);render();}}},'✕')
+      )
+    ));
+  });
+
+  // (longitudinal charts built inline in the return below)
+
+  const expInfo=expiryInfo(lot.expires);
+  const expAlert=expInfo.status!=='ok'&&expInfo.status!=='unknown'?el('div',{class:'alert-bar '+(expInfo.status==='expired'?'danger':'warn')},
+    el('div',{class:'alert-bar-stripe'}),
+    el('div',{class:'alert-bar-body'},
+      el('div',{class:'alert-bar-title'},(expInfo.status==='expired'?'⚠ This lot has expired':'🕐 This lot is expiring soon')),
+      el('div',{class:'alert-bar-sub'},expInfo.status==='expired'?'Expired '+Math.abs(expInfo.days)+' days ago — '+fmtDate(lot.expires):'Expires '+fmtDate(lot.expires)+' ('+expInfo.days+' days remaining)')
+    )
+  ):null;
+
+  // ── QC interpretation panel ──────────────────────────────────────────────
+  function buildQcInterpretation(){
+    if(scans.length<2)return null;
+    const signals=[];
+    if(qc.drift>0)signals.push({label:'Peak drift',val:qc.drift.toFixed(1)+' nm',note:qc.drift>5?'Significant red-shift — possible conjugation or aggregation':qc.drift>3?'Moderate drift — monitor closely':'Within tolerance',c:qc.drift>5?'var(--red)':qc.drift>3?'var(--amber)':'var(--green)'});
+    if(qc.broad>0)signals.push({label:'FWHM broadening',val:qc.broad.toFixed(1)+' nm',note:qc.broad>15?'Peak significantly broadened — strong aggregation indicator':qc.broad>8?'Moderate broadening':'Minimal broadening',c:qc.broad>15?'var(--red)':qc.broad>8?'var(--amber)':'var(--green)'});
+    if(qc.ptDrop>0)signals.push({label:'Peak:Trough drop',val:qc.ptDrop.toFixed(2),note:qc.ptDrop>1?'Significant P:T decline — aggregates absorbing at 480nm':qc.ptDrop>0.5?'Moderate P:T decline':'Stable ratio',c:qc.ptDrop>1?'var(--red)':qc.ptDrop>0.5?'var(--amber)':'var(--green)'});
+    if(qc.tailRise>0)signals.push({label:'Tail elevation',val:qc.tailRise.toFixed(5)+' AU',note:qc.tailRise>0.02?'Elevated long-λ baseline — aggregate scatter present':qc.tailRise>0.005?'Slight tail elevation':'Baseline stable',c:qc.tailRise>0.02?'var(--red)':qc.tailRise>0.005?'var(--amber)':'var(--green)'});
+    if(!signals.length)return null;
+    return el('div',{class:'pnl'},
+      el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},'QC Signal Interpretation'),el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'\u00A0·\u00A0Based on nanoComposix UV-Vis guidelines')),
+      el('div',{class:'pnl-body'},
+        el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'10px'}},
+          ...signals.map(s=>el('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px'}},
+            el('div',{style:{color:'var(--text-3)',fontSize:'11px',marginBottom:'4px'}},s.label),
+            el('div',{style:{color:s.c,fontFamily:'var(--mono)',fontSize:'16px',fontWeight:'600',marginBottom:'4px'}},s.val),
+            el('div',{style:{color:'var(--text-2)',fontSize:'11px',lineHeight:'1.4'}},s.note)
+          ))
+        )
+      )
+    );
+  }
+
+  return el('div',{class:'page'},
+    el('div',{class:'back-row no-print'},
+      el('div',{class:'back-info'},
+        el('button',{class:'btn btn-ghost btn-sm',onClick:()=>setState({view:'dashboard'})},'← Back'),
+        el('div',{style:{display:'flex',alignItems:'center',gap:'10px'}},
+          el('div',{class:'lot-id'},lot.lotNumber),
+          mkBadge(qc.status,qc.color)
+        )
+      ),
+      el('div',{class:'toolbar'},
+        el('div',{class:'toolbar-row'},
+          el('button',{class:'btn btn-ghost btn-sm',onClick:exportCSV},'⬇ CSV'),
+          el('button',{class:'btn btn-ghost btn-sm',onClick:()=>printReport(lot)},'🖨 Print Report'),
+          el('button',{class:'btn btn-ghost btn-sm',onClick:()=>setState({modal:'edit'})},'✏ Edit'),
+          el('button',{class:'btn btn-del btn-sm',style:{background:'rgba(224,92,92,0.15)',border:'1px solid rgba(224,92,92,0.4)',color:'var(--red)'},onClick:()=>{if(confirm('Delete lot '+lot.lotNumber+'? All data will be lost.')){DB.deleteLot(lot.id);setState({view:'dashboard',lot:null});}}},'Delete')
+        )
+      )
+    ),
+    expAlert,
+
+    el('div',{class:'pnl'},
+      el('div',{class:'pnl-head'},
+        el('span',{class:'pnl-title'},'Certificate of Analysis'),
+        el('button',{class:'btn btn-primary btn-sm',onClick:()=>setState({modal:'scan'})},'+ Upload Scan')
+      ),
+      el('div',{class:'pnl-body',style:{paddingTop:'0',paddingBottom:'0',padding:'0'}},
+        el('div',{class:'coa'},
+          ...[['Supplier',lot.supplier],['Catalog #',lot.catalog],['Particle Size',lot.size+' nm'],['OD (CoA)',lot.od],['Buffer',lot.buffer],['Date Received',fmtDate(lot.received)],['Expiration',fmtDate(lot.expires)],['Storage',lot.storage]].map(([k,v])=>
+            el('div',{class:'coa-cell'},el('div',{class:'coa-k'},k),el('div',{class:'coa-v'},v||'—'))
+          )
+        ),
+        lot.notes?el('div',{style:{padding:'0 0 16px 0',marginTop:'0'},class:'pnl-body'},el('div',{class:'coa-note'},lot.notes)):''
+      )
+    ),
+
+    el('div',{class:'no-print pnl',style:{marginTop:'0'}},
+      el('div',{class:'pnl-body',style:{paddingTop:'10px',paddingBottom:'10px',display:'flex',alignItems:'center',gap:'12px',flexWrap:'wrap'}},
+        el('span',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.08em',flexShrink:'0'}},'Absorbance view'),
+        el('div',{style:{width:'1px',height:'18px',background:'var(--border)',flexShrink:'0'}}),
+        buildAbsToggle(),
+        S.absMode==='corrected'?el('span',{style:{fontSize:'11px',color:'var(--amber)',background:'rgba(224,148,60,0.12)',border:'1px solid rgba(224,148,60,0.3)',borderRadius:'4px',padding:'2px 8px',fontFamily:'var(--mono)'}},'⚡ All absorbance values multiplied by dilution factor — true particle OD shown'):
+          el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'Raw measured values as-is from instrument')
+      )
+    ),
+
+    kpis.length?el('div',{class:'stats','style':'flex-wrap:wrap;'},
+      ...kpis.map(m=>el('div',{class:'stat',style:{color:m.c},title:m.tt||''},el('div',{class:'stat-val',style:{fontSize:'17px'}},m.v),el('div',{class:'stat-lbl'},m.k)))
+    ):'',
+
+    buildQcInterpretation(),
+    scans.length?buildSpectrumChart(scans,'UV-Vis Absorbance Overlay'+(S.absMode==='corrected'?' — Dilution-Corrected':''),false):'',
+    scans.length>=2?(()=>{
+      // Collect only charts that have data (buildLongChart returns null if <2 points)
+      const charts=[];
+      [
+        ['peakWl','λ max (Peak Wavelength)','nm','var(--gold)'],
+        ['maxAb','Max Absorbance (OD)','AU','var(--blue)'],
+        ['fwhm','FWHM','nm','var(--purple)'],
+        ['peakTrough','Peak:Trough Ratio at 480nm','','var(--green)'],
+        ['tail','Long-Wavelength Tail (700–900nm)','AU','var(--amber)'],
+        ['protein280','280nm Protein Abs','AU','var(--blue)'],
+      ].forEach(([m,lbl,unit,col])=>{
+        const c=buildLongChart(scans,m,lbl,unit,col,lot.od);
+        if(c)charts.push(c);
+      });
+      if(!charts.length)return null;
+      // ╔══════════════════════════════════════════════════════════╗
+      // ║  TUNE THESE — layout of the big Longitudinal Trends box  ║
+      // ╠══════════════════════════════════════════════════════════╣
+      const BOX_MARGIN_BOTTOM  = 14;           // space (px) between trends box and Scan History
+      const BOX_BORDER_RADIUS  = '12px';       // rounded corners of the outer box
+      const ROW_SEPARATOR_GAP  = '4px 0 8px'; // margin around the horizontal line between rows
+      const GRID_PADDING       = '8px 16px 16px'; // padding inside the chart grid (top sides bottom)
+      // ╚══════════════════════════════════════════════════════════╝
+
+      // Insert a full-width separator between row 1 (charts 0-2) and row 2 (charts 3-5)
+      const chartsWithSep=[];
+      charts.forEach((c,i)=>{
+        chartsWithSep.push(c);
+        if(i===2&&charts.length>3){
+          chartsWithSep.push(el('div',{style:{
+            gridColumn:'1 / -1',
+            borderTop:'1px solid var(--border)',
+            margin:ROW_SEPARATOR_GAP
+          }}));
+        }
+      });
+      return el('div',{style:{
+        background:'var(--panel)',border:'1px solid var(--border)',
+        borderRadius:BOX_BORDER_RADIUS,overflow:'hidden',margin:`0 0 ${BOX_MARGIN_BOTTOM}px 0`
+      }},
+        el('div',{style:{
+          display:'flex',alignItems:'center',justifyContent:'space-between',
+          padding:'14px 20px 12px',borderBottom:'1px solid var(--border)'
+        }},
+          el('span',{style:{fontSize:'12px',fontWeight:'700',color:'var(--text)',letterSpacing:'0.06em',textTransform:'uppercase',fontFamily:'var(--mono)'}},'Longitudinal Trends'),
+          el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'Stability over time · '+charts.length+' metrics')
+        ),
+        el('div',{style:{
+          display:'grid',
+          gridTemplateColumns:charts.length>=4?'1fr 1fr 1fr':'1fr 1fr',
+          columnGap:'0',rowGap:'0',
+          padding:GRID_PADDING
+        }},...chartsWithSep)
+      );
+    })():'',
+
+    el('div',{class:'pnl'},
+      el('div',{class:'pnl-head'},
+        el('span',{class:'pnl-title'},'Scan History'),
+        el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},scans.length+' QC check'+(scans.length!==1?'s':''))
+      ),
+      el('div',{class:'tbl-wrap'},
+        el('table',{},
+          el('thead',{},el('tr',{},...'Date,Operator,Scan Type,Diluent,Dil.,λ max,Abs max,ΔOD%,FWHM,P:T,Tail,280nm,Δ Theor.,Notes,'.split(',').map(h=>el('th',{},h)))),
+          scanRows
+        )
+      ),
+    ),
+
+    // Conjugate records removed from here — see Conjugates tab
+  );
+}
+
+// ============================================================================
+// COMPARE
+// ============================================================================
+function buildCompare(){
+  const lots=DB.getLots();const sel=S.compare;
+  const q=(S.compareSearch||'').toLowerCase();
+  // Per-lot scan selection — stored in S.compareScanSel: { [lotId]: scanId|'latest'|'first'|'pre-conjugation'|'post-conjugation' }
+  const scanSel=S.compareScanSel||{};
+
+  // Resolve which scan to use for a given lot
+  function resolveCompareScan(lid){
+    const lot=lots.find(l=>l.id===lid);
+    const sc=DB.getScans(lid).sort((a,b)=>new Date(a.date)-new Date(b.date)); // ascending
+    if(!sc.length)return null;
+    sc.forEach(x=>{x._lotSize=lot?lot.size:0;});
+    const mode=scanSel[lid]||'latest';
+    if(mode==='latest')return sc[sc.length-1];
+    if(mode==='first')return sc[0];
+    if(mode==='pre-conjugation')return sc.slice().reverse().find(s=>s.scanType==='pre-conjugation')||null;
+    if(mode==='post-conjugation')return sc.slice().reverse().find(s=>s.scanType==='post-conjugation')||null;
+    // specific scan id
+    return sc.find(s=>s.id===mode)||sc[sc.length-1];
+  }
+
+  const chartScans=[];
+  sel.forEach(lid=>{
+    const lot=lots.find(l=>l.id===lid);
+    const sc=resolveCompareScan(lid);
+    if(sc&&lot){chartScans.push(Object.assign({},sc,{lotLabel:lot.lotNumber+' ('+lot.size+'nm)'}));}
+  });
+
+  const rows=sel.map(lid=>{
+    const lot=lots.find(l=>l.id===lid);
+    const allSc=DB.getScans(lid).sort((a,b)=>new Date(a.date)-new Date(b.date));
+    allSc.forEach(x=>{x._lotSize=lot?lot.size:0;});
+    const qc=Analytics.qcStatus(allSc,lot?lot.od:0);
+    const chosen=resolveCompareScan(lid);
+    return{lot,allSc,qc,chosen};
+  }).filter(r=>r.lot);
+
+  const filteredLots=q?lots.filter(l=>(l.lotNumber||'').toLowerCase().includes(q)||(l.supplier||'').toLowerCase().includes(q)||String(l.size).includes(q)):lots;
+
+  const chips=el('div',{style:{display:'flex',flexWrap:'wrap',gap:'7px',marginTop:'10px'}});
+  if(!filteredLots.length){
+    chips.appendChild(el('div',{style:{fontSize:'13px',color:'var(--text-3)',fontFamily:'var(--mono)',padding:'8px 0'}},'No lots match your search'));
+  } else {
+    filteredLots.forEach(l=>{
+      const on=sel.includes(l.id);
+      const qcInfo=Analytics.qcStatus(DB.getScans(l.id).sort((a,b)=>new Date(b.date)-new Date(a.date)));
+      chips.appendChild(el('button',{class:'chip'+(on?' on':''),
+        onClick:()=>setState({compare:on?sel.filter(x=>x!==l.id):[...sel,l.id]})
+      },
+        el('span',{style:{display:'flex',alignItems:'center',gap:'7px'}},
+          el('span',{style:{width:'6px',height:'6px',borderRadius:'50%',background:on?qcInfo.color:'var(--text-3)',flexShrink:'0',display:'inline-block'}}),
+          l.lotNumber+' · '+l.size+'nm'
+        )
+      ));
+    });
+  }
+
+  // Per-lot scan selectors
+  const scanSelPanel = sel.length ? el('div',{class:'pnl'},
+    el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},'Scan Selection'),el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'Choose which scan to display for each lot')),
+    el('div',{class:'pnl-body'},
+      el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'10px'}},
+        ...sel.map(lid=>{
+          const lot=lots.find(l=>l.id===lid);
+          if(!lot)return null;
+          const allSc=DB.getScans(lid).sort((a,b)=>new Date(a.date)-new Date(b.date));
+          const mode=scanSel[lid]||'latest';
+          const hasPre=allSc.some(s=>s.scanType==='pre-conjugation');
+          const hasPost=allSc.some(s=>s.scanType==='post-conjugation');
+          const chosen=resolveCompareScan(lid);
+          const qcColor=Analytics.qcStatus(allSc,lot.od).color;
+
+          const sel2=el('select',{class:'inp',style:{fontSize:'11.5px'}});
+          const opts=[['latest','Latest scan'],['first','First scan / Incoming QC']];
+          if(hasPre)opts.push(['pre-conjugation','Pre-conjugation']);
+          if(hasPost)opts.push(['post-conjugation','Post-conjugation (latest)']);
+          opts.push(['──','── Specific Scans ──']);
+          allSc.forEach(s=>{
+            const typeTag=s.scanType==='pre-conjugation'?' [pre]':s.scanType==='post-conjugation'?' [post-conj]':'';
+            opts.push([s.id,s.date+(s.op?' · '+s.op:'')+typeTag]);
+          });
+          opts.forEach(([v,t])=>{
+            const opt=document.createElement('option');opt.value=v;opt.textContent=t;
+            if(v==='──'){opt.disabled=true;opt.style.color='var(--text-3)';}
+            if(v===mode)opt.selected=true;
+            sel2.appendChild(opt);
+          });
+          sel2.addEventListener('change',e=>{
+            const newSel=Object.assign({},scanSel,{[lid]:e.target.value});
+            setState({compareScanSel:newSel});
+          });
+
+          return el('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px 14px'}},
+            el('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'}},
+              el('span',{style:{width:'7px',height:'7px',borderRadius:'50%',background:qcColor,display:'inline-block',flexShrink:'0'}}),
+              el('span',{style:{fontSize:'12px',fontWeight:'600',color:'var(--text)',fontFamily:'var(--mono)'}},lot.lotNumber),
+              el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},lot.size+'nm · '+allSc.length+' scans')
+            ),
+            sel2,
+            chosen?el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--text-3)',fontFamily:'var(--mono)'}},
+              '→ '+fmtDate(chosen.date)+(chosen.op?' · '+chosen.op:'')+(chosen.scanType&&chosen.scanType!=='stability'?' · '+chosen.scanType.replace('-',' '):'')
+            ):el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--red)',fontFamily:'var(--mono)'}},'No matching scan found')
+          );
+        }).filter(Boolean)
+      )
+    )
+  ) : null;
+
+  return el('div',{class:'page'},
+    el('div',{class:'pnl'},
+      el('div',{class:'pnl-head'},
+        el('span',{class:'pnl-title'},'Select Lots to Compare'),
+        el('div',{style:{display:'flex',gap:'8px',alignItems:'center'}},
+          sel.length?el('span',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)'}},(sel.length)+' selected'):null,
+          sel.length?el('button',{class:'btn btn-ghost btn-sm',onClick:()=>setState({compare:[]})},'Clear all'):null
+        )
+      ),
+      el('div',{class:'pnl-body'},
+        el('div',{style:{display:'flex',gap:'8px',alignItems:'center',marginBottom:'2px'}},
+          el('input',{class:'search',style:{flex:'1',maxWidth:'320px'},placeholder:'Search lots by number, supplier, size…',value:S.compareSearch||'',onInput:e=>setState({compareSearch:e.target.value})}),
+          buildAbsToggle()
+        ),
+        chips
+      )
+    ),
+    scanSelPanel,
+    chartScans.length?buildSpectrumChart(chartScans,'Scan Comparison Overlay',true):'',
+    rows.length?el('div',{class:'pnl'},
+      el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},'Comparison Summary')),
+      el('div',{class:'tbl-wrap'},
+        el('table',{},
+          el('thead',{},el('tr',{},...'Lot,Size,Scans,Selected Scan,λ max,Abs max,FWHM,Peak Drift,Status'.split(',').map(h=>el('th',{},h)))),
+          el('tbody',{},...rows.map(r=>{
+            const a=r.chosen?getAn(r.chosen,r.lot.od):null;
+            const scanMode=scanSel[r.lot.id]||'latest';
+            const modeLabel=scanMode==='latest'?'Latest':scanMode==='first'?'First':scanMode==='pre-conjugation'?'Pre-conj':scanMode==='post-conjugation'?'Post-conj':r.chosen?fmtDate(r.chosen.date):'—';
+            return el('tr',{},
+              el('td',{style:{fontFamily:'var(--mono)',color:'var(--gold)',fontWeight:'500'}},r.lot.lotNumber),
+              el('td',{style:{fontFamily:'var(--mono)'}},r.lot.size+' nm'),
+              el('td',{style:{fontFamily:'var(--mono)'}},r.allSc.length),
+              el('td',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--text-2)'}},modeLabel+(r.chosen?' ('+fmtDate(r.chosen.date)+')':'')),
+              el('td',{style:{fontFamily:'var(--mono)'}},a?a.peakWl+' nm':'—'),
+              el('td',{style:{fontFamily:'var(--mono)'}},a?a.maxAb+' AU':'—'),
+              el('td',{style:{fontFamily:'var(--mono)'}},a&&a.fwhm?a.fwhm+' nm':'—'),
+              el('td',{style:{fontFamily:'var(--mono)'}},r.qc.drift!=null?r.qc.drift.toFixed(1)+' nm':'—'),
+              el('td',{},mkBadge(r.qc.status,r.qc.color))
+            );
+          }))
+        )
+      )
+    ):el('div',{class:'empty'},el('div',{class:'empty-icon'},'📊'),el('div',{class:'empty-msg'},sel.length?'No comparison data available':'Select lots above to compare'))
+  );
+}
+
+// ============================================================================
+// SPECTRUM CHART (SVG) — OriginLab style
+// ============================================================================
+function buildSpectrumChart(scans,title,useLotLabel){
+  const W=900,H=380,PL=30,PR=24,PT=20,PB=60;
+  const cW=W-PL-PR,cH=H-PT-PB;
+
+  let dataMin=Infinity,dataMax=-Infinity;
+  scans.forEach(s=>getRaw(s).forEach(p=>{if(p.wl<dataMin)dataMin=p.wl;if(p.wl>dataMax)dataMax=p.wl;}));
+  const wlMin=dataMin<300?270:400;
+  const wlMax=dataMax>700?Math.min(dataMax,900):750;
+  let mnA=Infinity,mxA=-Infinity;
+  scans.forEach(s=>getRaw(s).filter(p=>p.wl>=wlMin&&p.wl<=wlMax).forEach(p=>{if(p.ab<mnA)mnA=p.ab;if(p.ab>mxA)mxA=p.ab;}));
+  if(mnA===Infinity){mnA=0;mxA=1;}
+  const abR=niceRange(mnA*0.95,mxA*1.05);
+
+  // Cap Y ticks to max 6 for UV-Vis
+  function uvNiceTicks(lo,hi){
+    const range=hi-lo||1;
+    const rough=range/5;
+    const mag=Math.pow(10,Math.floor(Math.log10(rough)));
+    const nice=[1,2,2.5,5,10].map(f=>f*mag).find(f=>range/f<=6)||mag;
+    const start=Math.ceil(lo/nice)*nice;
+    const ticks=[];
+    for(let v=start;v<=hi+nice*0.01;v+=nice) ticks.push(Math.round(v*1e6)/1e6);
+    return ticks;
+  }
+
+  // X ticks every 50nm, filtered for spacing
+  const rawTicks=[];for(let t=Math.ceil(wlMin/50)*50;t<=wlMax;t+=50)rawTicks.push(t);
+  if(wlMin<=280&&!rawTicks.includes(280))rawTicks.push(280);
+  rawTicks.sort((a,b)=>a-b);
+  const xP=wl=>PL+(wl-wlMin)/(wlMax-wlMin)*cW;
+  const xTicks=rawTicks.filter((v,i,arr)=>i===0||xP(v)-xP(arr[i-1])>=30);
+  const yTicks=uvNiceTicks(abR.min,abR.max);
+  const yP=ab=>PT+cH-(ab-abR.min)/(abR.max-abR.min)*cH;
+  const vis=scans.map(()=>true);
+
+  // OriginLab theme colors — works in both dark & light mode
+  const isLight=document.body.classList.contains('light');
+  const axisColor=isLight?'#222':'#C8D0E0';
+  const tickColor=isLight?'#222':'#C8D0E0';
+  const gridColor=isLight?'rgba(0,0,0,0.06)':'rgba(255,255,255,0.04)';
+  const bgColor=isLight?'#fff':'#0E131C';
+  const labelColor=isLight?'#333':'#8A9AB8';
+  const axisTitleColor=isLight?'#111':'#C8D0E0';
+  const TICK_LEN=5;
+  const MINOR_TICK=3;
+
+  function buildSVG(){
+    const s=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,class:'chart'});
+
+    // Plot area fill (OriginLab white/near-white background inside axes)
+    s.appendChild(svgEl('rect',{x:PL,y:PT,width:cW,height:cH,fill:bgColor}));
+
+    // Subtle horizontal dotted gridlines (OriginLab default)
+    yTicks.forEach(v=>{
+      s.appendChild(svgEl('line',{x1:PL,y1:yP(v).toFixed(1),x2:PL+cW,y2:yP(v).toFixed(1),stroke:gridColor,strokeWidth:'1',strokeDasharray:'2,4'}));
+    });
+
+    // 280nm reference band
+    if(wlMin<=280){
+      const x280=xP(280).toFixed(1);
+      s.appendChild(svgEl('line',{x1:x280,y1:PT,x2:x280,y2:PT+cH,stroke:'#4A9FE0',strokeWidth:'1',strokeDasharray:'4,4',opacity:'0.5'}));
+      s.appendChild(svgEl('text',{x:parseFloat(x280)+4,y:PT+19,fill:'#4A9FE0',fontSize:'8.5',opacity:'0.8','font-family':'Inter,sans-serif','font-weight':'500'},'280 nm'));
+    }
+
+    // Peak marker lines (subtle)
+    scans.forEach((sc,i)=>{
+      const an=getAn(sc);
+      if(!vis[i]||!an?.peakWl)return;
+      const x=xP(an.peakWl).toFixed(1);
+      s.appendChild(svgEl('line',{x1:x,y1:PT,x2:x,y2:PT+cH,stroke:SCAN_COLORS[i%SCAN_COLORS.length],strokeWidth:'0.8',strokeDasharray:'3,5',opacity:'0.45'}));
+    });
+
+    // Data lines — thick, crisp (OriginLab default 1.5–2pt lines)
+    scans.forEach((sc,i)=>{
+      if(!vis[i])return;
+      const pts=getRaw(sc).filter(p=>p.wl>=wlMin&&p.wl<=wlMax).map(p=>[xP(p.wl),yP(p.ab)]);
+      if(!pts.length)return;
+      s.appendChild(svgEl('path',{d:makePath(pts),fill:'none',stroke:SCAN_COLORS[i%SCAN_COLORS.length],strokeWidth:'2',strokeLinejoin:'round','stroke-linecap':'round'}));
+    });
+
+    // ── Axis frame — solid box (OriginLab) ──────────────────────────────
+    // Bottom axis
+    s.appendChild(svgEl('line',{x1:PL,y1:PT+cH,x2:PL+cW,y2:PT+cH,stroke:axisColor,strokeWidth:'1.5'}));
+    // Left axis
+    s.appendChild(svgEl('line',{x1:PL,y1:PT,x2:PL,y2:PT+cH,stroke:axisColor,strokeWidth:'1.5'}));
+    // Top axis (lighter)
+    s.appendChild(svgEl('line',{x1:PL,y1:PT,x2:PL+cW,y2:PT,stroke:axisColor,strokeWidth:'1',opacity:'0.5'}));
+    // Right axis (lighter)
+    s.appendChild(svgEl('line',{x1:PL+cW,y1:PT,x2:PL+cW,y2:PT+cH,stroke:axisColor,strokeWidth:'1',opacity:'0.5'}));
+
+    // ── Tick marks — inward-pointing on bottom and left ─────────────────
+    xTicks.forEach(v=>{
+      const x=xP(v).toFixed(1);
+      // Major tick below axis
+      s.appendChild(svgEl('line',{x1:x,y1:PT+cH,x2:x,y2:(PT+cH+TICK_LEN).toFixed(1),stroke:tickColor,strokeWidth:'1.5'}));
+      // Mirror tick on top
+      s.appendChild(svgEl('line',{x1:x,y1:PT,x2:x,y2:(PT-MINOR_TICK).toFixed(1),stroke:tickColor,strokeWidth:'1',opacity:'0.4'}));
+    });
+    yTicks.forEach(v=>{
+      const y=yP(v).toFixed(1);
+      // Major tick left of axis
+      s.appendChild(svgEl('line',{x1:PL,y1:y,x2:(PL-TICK_LEN).toFixed(1),y2:y,stroke:tickColor,strokeWidth:'1.5'}));
+      // Mirror tick on right
+      s.appendChild(svgEl('line',{x1:PL+cW,y1:y,x2:(PL+cW+MINOR_TICK).toFixed(1),y2:y,stroke:tickColor,strokeWidth:'1',opacity:'0.4'}));
+    });
+
+    // ── Axis tick labels ─────────────────────────────────────────────────
+    xTicks.forEach(v=>s.appendChild(svgEl('text',{
+      x:(xP(v)-20).toFixed(1),y:(PT+cH+TICK_LEN+13).toFixed(1),
+      fill:labelColor,fontSize:'9',textAnchor:'middle',
+      'font-family':'Inter,system-ui,sans-serif','font-weight':'400'
+    },String(v))));
+    yTicks.forEach(v=>{
+      const t=typeof v==='number'&&v%1!==0?(Math.abs(v)<0.01?v.toFixed(4):v.toFixed(3)):String(v);
+      s.appendChild(svgEl('text',{
+        x:(PL-TICK_LEN-7).toFixed(1),y:(yP(v)+3.5).toFixed(1),
+        fill:labelColor,fontSize:'8.5',textAnchor:'end',
+        'font-family':'Inter,system-ui,sans-serif','font-weight':'400'
+      },t));
+    });
+
+    // ── Axis titles ───────────────────────────────────────────────────────
+    s.appendChild(svgEl('text',{
+      x:(PL+cW/2).toFixed(1),y:(H-8).toFixed(1),
+      fill:axisTitleColor,fontSize:'10',textAnchor:'middle',
+      'font-family':'Inter,system-ui,sans-serif','font-weight':'500'
+    },'Wavelength (nm)'));
+    // Y title centred in left margin (PL=90, so pivot at x=14 gives full label room)
+    s.appendChild(svgEl('text',{
+      x:'10',y:(PT+cH/2).toFixed(1),
+      fill:axisTitleColor,fontSize:'10',textAnchor:'middle',
+      'font-family':'Inter,system-ui,sans-serif','font-weight':'500',
+      transform:`rotate(-90,10,${(PT+cH/2).toFixed(1)})`
+    },'Absorbance (AU)'));
+
+    return s;
+  }
+
+  const wrap=el('div',{style:{width:'100%',overflow:'hidden'}});
+  wrap.appendChild(buildSVG());
+
+  const leg=el('div',{class:'leg'});
+  scans.forEach((sc,i)=>{
+    const col=SCAN_COLORS[i%SCAN_COLORS.length];
+    const lbl=useLotLabel?sc.lotLabel:fmtDate(sc.date)+(sc.op?' ('+sc.op+')':'');
+    const dot=el('span',{style:{width:'18px',height:'2.5px',background:col,display:'inline-block',borderRadius:'1px',flexShrink:'0',verticalAlign:'middle'}});
+    const btn=el('button',{class:'leg-btn',style:{border:'1px solid '+col+'55',color:col,background:col+'10'}},dot,' ',lbl);
+    btn.addEventListener('click',()=>{
+      vis[i]=!vis[i];btn.style.opacity=vis[i]?'1':'0.3';
+      wrap.innerHTML='';wrap.appendChild(buildSVG());
+    });
+    leg.appendChild(btn);
+  });
+
+  return el('div',{class:'pnl'},
+    el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},title)),
+    el('div',{class:'pnl-body'},wrap,leg)
+  );
+}
+
+// ============================================================================
+// LONGITUDINAL CHART (SVG) — Clean scientific style
+// ============================================================================
+function buildLongChart(scans,metric,label,unit,color,coaOd){
+  const data=scans.filter(s=>getAn(s,coaOd)&&getAn(s,coaOd)[metric]!=null).map(s=>({date:s.date,v:getAn(s,coaOd)[metric]}));
+  if(data.length<2)return null;
+
+  // ╔══════════════════════════════════════════════════════════╗
+  // ║  TUNE THESE — change one number, see the result          ║
+  // ╠══════════════════════════════════════════════════════════╣
+  const CHART_WIDTH       = 620;  // overall chart width  (px inside SVG viewBox)
+  const CHART_HEIGHT      = 350;  // overall chart height (px inside SVG viewBox)
+  const MARGIN_LEFT       = 58;   // left margin — increase if Y tick labels get cut off
+  const MARGIN_RIGHT      = 58;   // right margin — increase if latest value gets cut off
+  const MARGIN_TOP        = 65;   // top margin  — room for the chart title + latest value
+  const MARGIN_BOTTOM     = 50;   // bottom margin — room for X tick labels + "Date" title
+  const Y_TITLE_X         = 40;    // X position of the rotated Y-axis label (increase = moves RIGHT toward axis)
+  const Y_TITLE_FONT      = 9;    // font size of the rotated Y-axis label
+  const TICK_LABEL_FONT   = 13;    // font size of Y tick number labels
+  const CHART_TITLE_FONT  = 30;   // font size of the bold chart title (λ Max, Max OD, etc.)
+  const CHART_TITLE_Y     = 35;   // vertical position of chart title inside SVG (increase = moves DOWN)
+  const GRID_PADDING      = '8px 16px 16px'; // padding inside the grid (top right/left bottom)
+  // ╚══════════════════════════════════════════════════════════╝
+
+  const W=CHART_WIDTH, H=CHART_HEIGHT;
+  const PL=MARGIN_LEFT, PR=MARGIN_RIGHT, PT=MARGIN_TOP, PB=MARGIN_BOTTOM;
+  const cW=W-PL-PR, cH=H-PT-PB;
+
+  // ── Y range & ticks ──────────────────────────────────────────────────────
+  const vals=data.map(d=>d.v);
+  const rawMin=Math.min(...vals), rawMax=Math.max(...vals);
+  const span=rawMax-rawMin||Math.abs(rawMax)*0.08||1;
+  const padded_lo=rawMin-span*0.2, padded_hi=rawMax+span*0.2;
+
+  function niceTicks(lo,hi,maxN){
+    const range=hi-lo||1;
+    const rough=range/(maxN-1);
+    const mag=Math.pow(10,Math.floor(Math.log10(rough)));
+    const step=[1,2,2.5,5,10].map(f=>f*mag).find(f=>range/f<=(maxN+0.5))||mag;
+    const start=Math.ceil(lo/step-0.0001)*step;
+    const ticks=[];
+    for(let v=start;v<=hi+step*0.001;v=Math.round((v+step)*1e9)/1e9){
+      ticks.push(Math.round(v*1e9)/1e9);
+      if(ticks.length>maxN+1)break;
+    }
+    return ticks;
+  }
+  const yTicks=niceTicks(padded_lo,padded_hi,5);
+  const yMin=yTicks[0], yMax=yTicks[yTicks.length-1];
+
+  // ── Coordinate mappers ───────────────────────────────────────────────────
+  const xP=i=>PL+(data.length>1?i/(data.length-1):0.5)*cW;
+  const yP=v=>PT+cH-(v-yMin)/(yMax-yMin)*cH;
+  const pts=data.map((d,i)=>[xP(i),yP(d.v)]);
+  const gId='lg'+metric.replace(/[^a-z]/gi,'')+Math.random().toString(36).slice(2,5);
+  const clipId=gId+'clip';
+  const TICK=4;
+
+  // ── Theme ────────────────────────────────────────────────────────────────
+  const isLight=document.body.classList.contains('light');
+  const axC   =isLight?'rgba(0,0,0,0.22)'  :'rgba(255,255,255,0.18)';
+  const gridC =isLight?'rgba(0,0,0,0.05)'  :'rgba(255,255,255,0.04)';
+  const plotBg=isLight?'rgba(0,0,0,0.02)'  :'rgba(0,0,0,0.22)';
+  const lblC  =isLight?'#666'              :'#6B7A90';
+  const titC  =isLight?'#333'              :'#9AABB8';
+
+  // Smart Y decimal precision
+  const yRange=yMax-yMin||1;
+  const yPrec=yRange<0.001?4:yRange<0.01?3:yRange<0.1?2:yRange<10?2:yRange<100?1:0;
+
+  // ── SVG ─────────────────────────────────────────────────────────────────
+  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,style:'width:100%;display:block;overflow:hidden'});
+  const defs=svgEl('defs',{});
+
+  // Area gradient
+  const gr=svgEl('linearGradient',{id:gId,x1:'0',y1:'0',x2:'0',y2:'1'});
+  gr.appendChild(svgEl('stop',{offset:'0%'  ,stopColor:color,stopOpacity:'0.20'}));
+  gr.appendChild(svgEl('stop',{offset:'100%',stopColor:color,stopOpacity:'0.00'}));
+  defs.appendChild(gr);
+
+  // Clip path
+  const cp=svgEl('clipPath',{id:clipId});
+  cp.appendChild(svgEl('rect',{x:PL,y:PT,width:cW,height:cH}));
+  defs.appendChild(cp);
+  svg.appendChild(defs);
+
+  // ── Chart title + latest value — drawn inside SVG in the PT area ─────────
+  const latestVal=vals[vals.length-1];
+  const latestStr=yPrec===0?String(Math.round(latestVal)):latestVal.toFixed(yPrec);
+
+  // Clean, human-readable label names
+  const labelMap={
+    'λ max (Peak Wavelength)':'λ Max',
+    'Max Absorbance (OD)':'Max OD',
+    'FWHM':'FWHM',
+    'Peak:Trough Ratio at 480nm':'Peak : Trough',
+    'Long-Wavelength Tail (700–900nm)':'700–900 nm Tail',
+    '280nm Protein Abs':'280 nm Protein',
+  };
+  const displayLabel=labelMap[label]||label;
+
+  // Title — bold, left-aligned flush with Y axis
+  svg.appendChild(svgEl('text',{
+    x:PL.toFixed(1),y:CHART_TITLE_Y.toFixed(1),
+    fill:isLight?'#111':'#E2EAF4',fontSize:String(CHART_TITLE_FONT),fontWeight:'700',textAnchor:'start',
+    'font-family':'Inter,system-ui,sans-serif','letter-spacing':'0.01em'
+  },displayLabel));
+
+  // Latest value — right-aligned to W-PR so it stays inside the viewBox
+  svg.appendChild(svgEl('text',{
+    x:(PL+cW-10).toFixed(1),y:CHART_TITLE_Y.toFixed(1),
+    fill:color,fontSize:String(CHART_TITLE_FONT),fontWeight:'700',textAnchor:'end',
+    'font-family':'Inter,system-ui,monospace'
+  },latestStr+(unit?' '+unit:'')));
+
+  // ── Plot background ──────────────────────────────────────────────────────
+  svg.appendChild(svgEl('rect',{x:PL,y:PT,width:cW,height:cH,fill:plotBg}));
+
+  // ── Horizontal gridlines ─────────────────────────────────────────────────
+  const gGroup=svgEl('g',{'clip-path':`url(#${clipId})`});
+  yTicks.forEach(v=>{
+    const y=yP(v);
+    gGroup.appendChild(svgEl('line',{x1:PL,y1:y.toFixed(2),x2:PL+cW,y2:y.toFixed(2),
+      stroke:gridC,strokeWidth:'1',strokeDasharray:'3,5'}));
+  });
+  svg.appendChild(gGroup);
+
+  // ── Area fill + line (clipped) ───────────────────────────────────────────
+  const dataGroup=svgEl('g',{'clip-path':`url(#${clipId})`});
+  const aPath='M'+xP(0).toFixed(2)+','+yP(yMin).toFixed(2)+
+    pts.map(p=>' L'+p[0].toFixed(2)+','+p[1].toFixed(2)).join('')+
+    ' L'+xP(data.length-1).toFixed(2)+','+yP(yMin).toFixed(2)+' Z';
+  dataGroup.appendChild(svgEl('path',{d:aPath,fill:`url(#${gId})`,strokeWidth:'0'}));
+  dataGroup.appendChild(svgEl('path',{d:makePath(pts),fill:'none',stroke:color,
+    strokeWidth:'2',strokeLinejoin:'round','stroke-linecap':'round'}));
+  svg.appendChild(dataGroup);
+
+  // ── Data points ──────────────────────────────────────────────────────────
+  pts.forEach(p=>{
+    svg.appendChild(svgEl('circle',{cx:p[0].toFixed(2),cy:p[1].toFixed(2),r:'3.5',
+      fill:color,stroke:isLight?'#fff':'#0a0f18',strokeWidth:'1.8'}));
+  });
+
+  // ── Axis lines ───────────────────────────────────────────────────────────
+  svg.appendChild(svgEl('line',{x1:PL,y1:PT+cH,x2:PL+cW,y2:PT+cH,stroke:axC,strokeWidth:'1.5'}));
+  svg.appendChild(svgEl('line',{x1:PL,y1:PT,x2:PL,y2:PT+cH,stroke:axC,strokeWidth:'1.5'}));
+
+  // ── Y tick marks + labels ────────────────────────────────────────────────
+  yTicks.forEach(v=>{
+    const y=yP(v).toFixed(2);
+    svg.appendChild(svgEl('line',{x1:(PL-TICK).toFixed(1),y1:y,x2:PL,y2:y,stroke:axC,strokeWidth:'1.2'}));
+    const t=yPrec===0?String(Math.round(v)):v.toFixed(yPrec);
+    svg.appendChild(svgEl('text',{
+      x:(PL-TICK-4).toFixed(1),y:(parseFloat(y)+3.5).toFixed(1),
+      fill:lblC,fontSize:String(TICK_LABEL_FONT),textAnchor:'end',
+      'font-family':'Inter,system-ui,monospace','font-weight':'400'
+    },t));
+  });
+
+  // ── Y axis title (rotated) — close to the Y axis line ───────────────────
+  const yMid=(PT+cH/2).toFixed(1);
+  const yAxisLbl=unit||label.replace(/\(.*\)/,'').replace('Peak Wavelength','λ max')
+    .replace('Max Absorbance','OD').replace('Long-Wavelength Tail','Tail')
+    .replace('Peak:Trough Ratio at 480nm','P:T').replace('Protein Abs','280nm').trim();
+  svg.appendChild(svgEl('text',{
+    x:String(Y_TITLE_X),y:yMid,
+    fill:titC,fontSize:String(Y_TITLE_FONT),textAnchor:'middle','font-weight':'500',
+    'font-family':'Inter,system-ui,sans-serif',
+    transform:`rotate(-90,${Y_TITLE_X},${yMid})`
+  },yAxisLbl));
+
+  // ── X tick marks + date labels ───────────────────────────────────────────
+  // Max 5 labels, evenly spread, never overlap
+  let xi;
+  if(data.length<=5)      xi=data.map((_,i)=>i);
+  else if(data.length<=8) xi=[0,Math.round((data.length-1)/3),Math.round(2*(data.length-1)/3),data.length-1];
+  else                    xi=[0,Math.round((data.length-1)/4),Math.round((data.length-1)/2),Math.round(3*(data.length-1)/4),data.length-1];
+
+  // Minimum pixel spacing check — skip middle ticks if they'd collide (< 36px apart)
+  const xiFiltered=xi.filter((idx,pos)=>{
+    if(pos===0||pos===xi.length-1)return true;
+    const prev=xi[pos-1],next=xi[pos+1];
+    return(xP(idx)-xP(prev)>=34)&&(xP(next)-xP(idx)>=34);
+  });
+
+  xiFiltered.forEach(i=>{
+    const x=xP(i).toFixed(2);
+    const yBase=(PT+cH).toFixed(2);
+    svg.appendChild(svgEl('line',{x1:x,y1:yBase,x2:x,y2:(PT+cH+TICK).toFixed(2),stroke:axC,strokeWidth:'1.2'}));
+    // Date label: MM/DD, placed TICK+13px below axis
+    svg.appendChild(svgEl('text',{
+      x,y:(PT+cH+TICK+18).toFixed(1),
+      fill:lblC,fontSize:'9.5',textAnchor:'middle',
+      'font-family':'Inter,system-ui,monospace'
+    },fmtDate(data[i].date).slice(0,5)));
+  });
+
+  // ── X axis title — fixed distance below date labels ──────────────────────
+  // y = PT + cH + TICK + date_label(~13) + gap(9) + title
+  svg.appendChild(svgEl('text',{
+    x:(PL+cW/2).toFixed(1),y:(PT+cH+TICK+13+25).toFixed(1),
+    fill:titC,fontSize:'9.5',textAnchor:'middle','font-weight':'500',
+    'font-family':'Inter,system-ui,sans-serif'
+  },'Date'));
+
+  // ── Return: just the SVG in a div, with bottom padding for row breathing room ──
+  return el('div',{style:{padding:'4px 6px 6px'}},svg);
+}
+
+// ============================================================================
+// PROFESSIONAL PRINT REPORT
+// ============================================================================
+function printReport(lot){
+  const rptRoot=document.getElementById('rpt-root');
+  rptRoot.innerHTML='';
+  rptRoot.appendChild(buildReport(lot));
+  window.print();
+  setTimeout(()=>{rptRoot.innerHTML='';},500);
+}
+
+function buildReport(lot){
+  const scans=DB.getScans(lot.id).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  scans.forEach(s=>{s._lotSize=lot.size;});
+  const qc=Analytics.qcStatus(scans,lot.od);
+  const last=scans[scans.length-1];
+  const first=scans[0];
+  const aLast=last?(last.an||null):null;
+  const th=THEORETICAL_PEAKS[lot.size]||530;
+  const now=new Date();
+  const reportDate=now.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const reportId='AUT-'+lot.id.slice(-6).toUpperCase()+'-'+now.getFullYear();
+
+  function odPctColor(v){if(v==null)return'neutral';const a=Math.abs(v);return a>20?'danger':a>10?'warn':'ok';}
+  function ptColorCls(v){if(!v)return'neutral';return v>=2.5?'ok':v>=1.5?'warn':'danger';}
+  function tailColorCls(v){if(v==null)return'neutral';return v<0.01?'ok':v<0.03?'warn':'danger';}
+  function sigClass(v,w,d){if(v==null)return'neutral';return v>=d?'danger':v>=w?'warn':'ok';}
+  function fmt(v,dec,unit){dec=dec||2;unit=unit||'';if(v==null||v===undefined||v==='')return'—';return(typeof v==='number'?v.toFixed(dec):v)+(unit?' '+unit:'');}
+  function fmtSign(v,dec,unit){dec=dec||2;unit=unit||'';if(v==null)return'—';return(v>0?'+':'')+v.toFixed(dec)+(unit?' '+unit:'');}
+
+  const verdictMap={
+    'Stable':     {cls:'stable',      icon:'●', title:'Stable — Pass',            desc:'All UV-Vis QC signals are within acceptable tolerance. This lot is suitable for use.'},
+    'Drifting':   {cls:'drifting',    icon:'◐', title:'Drifting — Monitor',        desc:'One or more signals exceeded the warning threshold. Review trend data before use.'},
+    'Aggregating':{cls:'aggregating', icon:'▲', title:'Aggregating — Fail',        desc:'Critical signals indicate aggregation or degradation. Quarantine and investigate.'},
+    'No Data':    {cls:'nodata',      icon:'○', title:'Insufficient Data',         desc:'At least 2 scans are required to generate a stability verdict.'}
+  };
+  const verd=verdictMap[qc.status]||verdictMap['No Data'];
+
+  // ── Cover ──────────────────────────────────────────────────────────────────
+  const verdPillColor=qc.status==='Stable'?{c:'#1A9E60',b:'rgba(26,158,96,0.4)',bg:'rgba(26,158,96,0.12)'}:
+                      qc.status==='Aggregating'?{c:'#C83C3C',b:'rgba(200,60,60,0.4)',bg:'rgba(200,60,60,0.12)'}:
+                      {c:'#C07020',b:'rgba(192,112,32,0.4)',bg:'rgba(192,112,32,0.12)'};
+
+  const cover=el('div',{class:'rpt-cover'},
+    el('div',{class:'rpt-cover-top'},
+      el('div',{class:'rpt-brand'},
+        el('div',{class:'rpt-brand-box'},'Au'),
+        el('div',{},el('div',{class:'rpt-brand-name'},'AuTrack'),el('div',{class:'rpt-brand-tag'},'Nanoparticle QC'))
+      ),
+      el('div',{class:'rpt-doc-meta'},
+        el('div',{class:'rpt-doc-type'},'QC Report'),
+        el('div',{class:'rpt-doc-date'},reportDate),
+        el('div',{class:'rpt-doc-date',style:{opacity:'0.5'}},reportId)
+      )
+    ),
+    el('div',{class:'rpt-cover-title'},lot.lotNumber),
+    el('div',{class:'rpt-cover-sub'},lot.catalog+' · '+lot.supplier),
+    el('div',{class:'rpt-cover-pills'},
+      el('span',{class:'rpt-pill',style:{color:'#C8A84B',borderColor:'rgba(200,168,75,0.4)',background:'rgba(200,168,75,0.12)'}},lot.size+'nm AuNP'),
+      el('span',{class:'rpt-pill',style:{color:'#8A9AB8',borderColor:'rgba(138,154,184,0.3)',background:'rgba(138,154,184,0.1)'}},lot.supplier),
+      el('span',{class:'rpt-pill',style:{color:verdPillColor.c,borderColor:verdPillColor.b,background:verdPillColor.bg}},qc.status)
+    )
+  );
+
+  // ── Section 1: Executive Summary ──────────────────────────────────────────
+  const kpiData=aLast?[
+    {label:'λ max (Last)',    val:aLast.peakWl?aLast.peakWl+' nm':'—'},
+    {label:'Peak Drift',     val:qc.drift!=null?qc.drift.toFixed(1)+' nm':'—'},
+    {label:'FWHM (Last)',    val:aLast.fwhm?aLast.fwhm+' nm':'—'},
+    {label:'ΔOD vs CoA',    val:aLast.odPctChange!=null?fmtSign(aLast.odPctChange,1,'%'):'—'},
+  ]:[];
+
+  const sec1=el('div',{class:'rpt-section'},
+    el('div',{class:'rpt-section-title'},'Executive Summary'),
+    el('div',{class:'rpt-verdict '+verd.cls},
+      el('div',{class:'rpt-verdict-icon'},verd.icon),
+      el('div',{},el('div',{class:'rpt-verdict-title'},verd.title),el('div',{class:'rpt-verdict-sub'},verd.desc))
+    ),
+    kpiData.length?el('div',{class:'rpt-kpis'},
+      ...kpiData.map(k=>el('div',{class:'rpt-kpi'},el('div',{class:'rpt-kpi-label'},k.label),el('div',{class:'rpt-kpi-val'},k.val)))
+    ):''
+  );
+
+  // ── Section 2: Lot Info + Signal Analysis (two-col) ───────────────────────
+  const expInfo=expiryInfo(lot.expires);
+  const expCls=expInfo.status==='expired'?'c-danger':expInfo.status==='soon'?'c-warn':'';
+  const infoRows=[
+    ['Catalog #',lot.catalog||'—'],['Supplier',lot.supplier||'—'],
+    ['Particle Size',lot.size+' nm'],['Theoretical λ max',th+' nm'],
+    ['CoA OD',String(lot.od)],['Buffer',lot.buffer||'—'],
+    ['Received',fmtDate(lot.received)||'—'],
+    ['Expires',lot.expires?(fmtDate(lot.expires)+' ('+expInfo.label+')'):('—')],
+    ['Storage',lot.storage||'—'],
+    ['Scan range',scans.length>1?(fmtDate(first.date)+' → '+fmtDate(last.date)):scans.length===1?fmtDate(last.date):'None'],
+  ];
+  if(lot.notes)infoRows.push(['Notes',lot.notes]);
+
+  const infoTable=el('table',{class:'rpt-info'},el('tbody',{},...infoRows.map(([k,v])=>el('tr',{},el('td',{},k),el('td',{class:k==='Expires'&&expInfo.status!=='ok'&&expInfo.status!=='unknown'?expCls:''},v)))));
+
+  const hasSignals=scans.length>=2;
+  // Signal tiles work from single scan too — just show current values
+  function mkSig(label,val,note,cls){return el('div',{class:'rpt-sig sig-'+cls},el('div',{class:'rpt-sig-label'},label),el('div',{class:'rpt-sig-val'},val),el('div',{class:'rpt-sig-note'},note));}
+  const sigEls=[];
+  if(aLast){
+    // Trend-based signals (need ≥2 scans) vs point-in-time signals (work with 1)
+    const drift=hasSignals?(qc.drift||0):null;
+    sigEls.push(mkSig('Peak Drift',drift!=null?fmt(drift,1,' nm'):'—',drift==null?'Need ≥2 scans':drift>5?'Critical red-shift':drift>3?'Moderate — monitor':'Within tolerance',drift==null?'neutral':sigClass(drift,3,5)));
+    const broad=hasSignals?(qc.broad||0):null;
+    sigEls.push(mkSig('FWHM Broadening',broad!=null?fmt(broad,1,' nm'):'—',broad==null?'Need ≥2 scans':broad>15?'Strong aggregation indicator':broad>8?'Moderate broadening':'Minimal change',broad==null?'neutral':sigClass(broad,8,15)));
+    const ptLast=aLast.peakTrough;
+    sigEls.push(mkSig('P:T Ratio',ptLast?ptLast.toFixed(2):'—',ptLast==null?'No data':ptLast>=2.5?'Excellent monodispersity':ptLast>=1.5?'Acceptable':'Low — aggregates at 480nm',ptLast==null?'neutral':ptColorCls(ptLast)));
+    const tailRise=hasSignals?(qc.tailRise||0):null;
+    sigEls.push(mkSig('Tail Elevation',tailRise!=null?fmt(tailRise,5,' AU'):'—',tailRise==null?'Need ≥2 scans':tailRise>0.02?'Aggregate scatter present':tailRise>0.005?'Slight elevation':'Baseline stable',tailRise==null?'neutral':sigClass(tailRise,0.005,0.02)));
+    const odPct=aLast.odPctChange;
+    sigEls.push(mkSig('ΔOD vs CoA',odPct!=null?fmtSign(odPct,1,'%'):'—',odPct==null?'CoA OD not set':Math.abs(odPct)>20?'Significant OD change':Math.abs(odPct)>10?'Moderate OD shift':'Consistent with CoA',odPct==null?'neutral':odPctColor(odPct)));
+    const fwhmLast=aLast.fwhm;
+    sigEls.push(mkSig('FWHM',fwhmLast?fmt(fwhmLast,1,' nm'):'—',fwhmLast==null?'No data':fwhmLast<50?'Narrow — monodisperse':fwhmLast<70?'Normal range':'Broad — heterogeneous',fwhmLast==null?'neutral':sigClass(fwhmLast,55,70)));
+    const p280=aLast.protein280;
+    sigEls.push(mkSig('280nm Abs',p280!=null?fmt(p280,4,' AU'):'—',p280==null?'No data':p280>0.1?'Possible free protein':p280>0.01?'Trace signal':'Below detection',p280==null?'neutral':p280>0.1?'warn':'ok'));
+    const shift=aLast.shift;
+    sigEls.push(mkSig('Δ Theor. λ',shift!=null?fmtSign(shift,1,'%'):'—',shift==null?'No data':Math.abs(shift)>2?'Significant Mie shift':Math.abs(shift)>1?'Minor — normal':'Excellent agreement',shift==null?'neutral':sigClass(Math.abs(shift),1,2)));
+  }
+
+  const sec2=el('div',{class:'rpt-section'},
+    el('div',{class:'rpt-section-title'},'Lot Information & QC Signals'),
+    el('div',{class:'rpt-two-col'},
+      infoTable,
+      sigEls.length?el('div',{class:'rpt-signals'},...sigEls):el('div',{style:{fontSize:'8px',color:'#888',fontStyle:'italic'}},'No scan data available.')
+    )
+  );
+
+  // ── Report-local analysis resolver (never depends on S.absMode) ──────────
+  function rptGetAn(scan){return scan?scan.an||null:null;}
+  function rptGetRaw(scan){return scan?scan.raw||[]:[]}
+
+  // ── UV-Vis spectrum chart for report ──────────────────────────────────────
+  function buildRptSpectrumChart(scanList,title){
+    if(!scanList||!scanList.length)return null;
+    const W=660,H=180,PL=52,PR=12,PT=10,PB=32;
+    const cW=W-PL-PR,cH=H-PT-PB;
+    let wlMin=400,wlMax=750;
+    let mnA=Infinity,mxA=-Infinity;
+    scanList.forEach(sc=>{
+      rptGetRaw(sc).filter(p=>p.wl>=wlMin&&p.wl<=wlMax).forEach(p=>{if(p.ab<mnA)mnA=p.ab;if(p.ab>mxA)mxA=p.ab;});
+    });
+    if(mnA===Infinity){mnA=0;mxA=1;}
+    const abR=niceRange(mnA*0.95,mxA*1.05);
+    const rawTicks=[];for(let t=Math.ceil(wlMin/50)*50;t<=wlMax;t+=50)rawTicks.push(t);
+    const xP=wl=>PL+(wl-wlMin)/(wlMax-wlMin)*cW;
+    const xTicks=rawTicks.filter((v,i,arr)=>i===0||xP(v)-xP(arr[i-1])>=28);
+    const yTicks=linTicks(abR.min,abR.max);
+    const yP=ab=>PT+cH-(ab-abR.min)/(abR.max-abR.min)*cH;
+    const axC='#999';const gridC='rgba(0,0,0,0.06)';const bgC='#fff';const lblC='#777';const TICK=4;
+    const COLORS=['#9A6E1A','#C83C3C','#2A7FC0','#1A9E60','#6A4FC0','#C07020'];
+    const s=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,style:'width:100%;display:block'});
+    s.appendChild(svgEl('rect',{x:PL,y:PT,width:cW,height:cH,fill:bgC,stroke:'#E2DDD4','stroke-width':'1'}));
+    yTicks.forEach(v=>s.appendChild(svgEl('line',{x1:PL,y1:yP(v).toFixed(1),x2:PL+cW,y2:yP(v).toFixed(1),stroke:gridC,'stroke-width':'1','stroke-dasharray':'2,4'})));
+    // Peak markers
+    scanList.forEach((sc,i)=>{
+      const an=rptGetAn(sc);
+      if(!an||!an.peakWl)return;
+      const x=xP(an.peakWl).toFixed(1);
+      s.appendChild(svgEl('line',{x1:x,y1:PT,x2:x,y2:PT+cH,stroke:COLORS[i%COLORS.length],'stroke-width':'0.8','stroke-dasharray':'3,4',opacity:'0.5'}));
+    });
+    // Data lines
+    scanList.forEach((sc,i)=>{
+      const pts=rptGetRaw(sc).filter(p=>p.wl>=wlMin&&p.wl<=wlMax).map(p=>[xP(p.wl),yP(p.ab)]);
+      if(!pts.length)return;
+      s.appendChild(svgEl('path',{d:makePath(pts),fill:'none',stroke:COLORS[i%COLORS.length],'stroke-width':'1.8','stroke-linejoin':'round','stroke-linecap':'round'}));
+    });
+    // Axes
+    s.appendChild(svgEl('line',{x1:PL,y1:PT+cH,x2:PL+cW,y2:PT+cH,stroke:axC,'stroke-width':'1.2'}));
+    s.appendChild(svgEl('line',{x1:PL,y1:PT,x2:PL,y2:PT+cH,stroke:axC,'stroke-width':'1.2'}));
+    xTicks.forEach(v=>{
+      const x=xP(v).toFixed(1);
+      s.appendChild(svgEl('line',{x1:x,y1:PT+cH,x2:x,y2:(PT+cH+TICK).toFixed(1),stroke:axC,'stroke-width':'1'}));
+      s.appendChild(svgEl('text',{x,y:(PT+cH+TICK+9).toFixed(1),fill:lblC,'font-size':'9',textAnchor:'middle','font-family':'Inter,system-ui,sans-serif'},String(v)));
+    });
+    yTicks.forEach(v=>{
+      const y=yP(v).toFixed(1);
+      s.appendChild(svgEl('line',{x1:PL,y1:y,x2:(PL-TICK).toFixed(1),y2:y,stroke:axC,'stroke-width':'1'}));
+      s.appendChild(svgEl('text',{x:(PL-TICK-3).toFixed(1),y:(parseFloat(y)+3).toFixed(1),fill:lblC,'font-size':'8',textAnchor:'end','font-family':'Inter,system-ui,sans-serif'},v.toFixed(3)));
+    });
+    s.appendChild(svgEl('text',{x:(PL+cW/2).toFixed(1),y:(H-2).toFixed(1),fill:'#555','font-size':'9',textAnchor:'middle','font-family':'Inter,system-ui,sans-serif','font-weight':'500'},'Wavelength (nm)'));
+    s.appendChild(svgEl('text',{x:'10',y:(PT+cH/2).toFixed(1),fill:'#555','font-size':'9',textAnchor:'middle','font-family':'Inter,system-ui,sans-serif','font-weight':'500',transform:`rotate(-90,10,${(PT+cH/2).toFixed(1)})`},'Absorbance (AU)'));
+    const legItems=scanList.map((sc,i)=>el('span',{style:{display:'inline-flex',alignItems:'center',gap:'4px',marginRight:'14px',fontSize:'8.5px',color:COLORS[i%COLORS.length],fontFamily:'monospace'}},
+      el('span',{style:{width:'14px',height:'2px',background:COLORS[i%COLORS.length],display:'inline-block',borderRadius:'1px'}}),
+      fmtDate(sc.date)+(sc.op?' ('+sc.op+')':'')
+    ));
+    return el('div',{class:'rpt-chart-box full-width'},
+      el('div',{class:'rpt-chart-title'},title),
+      s,
+      el('div',{style:{marginTop:'4px'}},...legItems)
+    );
+  }
+
+  // ── Section 3: UV-Vis spectrum only ──────────────────────────────────────
+  const sec3=scans.length>=1?el('div',{class:'rpt-section'},
+    el('div',{class:'rpt-section-title'},'UV-Vis Absorbance — All Scans'),
+    buildRptSpectrumChart(scans,'UV-Vis Absorbance Overlay — All Scans')
+  ):null;
+
+  // ── Section 4: Scan History ───────────────────────────────────────────────
+  const tblBody=el('tbody',{});
+  scans.forEach(s=>{
+    const a=s.an||{};
+    tblBody.appendChild(el('tr',{},
+      el('td',{},fmtDate(s.date)||'—'),el('td',{},s.op||'—'),
+      el('td',{},(s.scanType||'stability').replace('-',' ')),
+      el('td',{},(s.dil||1)+'×'),
+      el('td',{class:'c-gold'},a.peakWl?String(a.peakWl):'—'),
+      el('td',{},(a.maxAb!=null)?String(a.maxAb):'—'),
+      el('td',{class:a.odPctChange!=null?'c-'+odPctColor(a.odPctChange):''},a.odPctChange!=null?fmtSign(a.odPctChange,1,'%'):'—'),
+      el('td',{},(a.fwhm!=null)?String(a.fwhm):'—'),
+      el('td',{class:a.peakTrough?'c-'+ptColorCls(a.peakTrough):''},a.peakTrough?a.peakTrough.toFixed(2):'—'),
+      el('td',{class:a.tail!=null?'c-'+tailColorCls(a.tail):''},a.tail!=null?a.tail.toFixed(4):'—'),
+      el('td',{class:a.protein280>0.01?'c-blue':''},(a.protein280!=null)?a.protein280.toFixed(4):'—')
+    ));
+  });
+  const sec4=el('div',{class:'rpt-section'},
+    el('div',{class:'rpt-section-title'},'Scan History'),
+    scans.length?el('table',{class:'rpt-tbl'},
+      el('thead',{},el('tr',{},...['Date','Op','Type','Dil.','λmax','Abs','ΔOD%','FWHM','P:T','Tail','280nm'].map(h=>el('th',{},h)))),
+      tblBody
+    ):el('div',{style:{fontSize:'8px',color:'#888',fontStyle:'italic'}},'No scans recorded.')
+  );
+
+  // ── Section 5: Interpretation ─────────────────────────────────────────────
+  const interp=[];
+  if(hasSignals){
+    if(qc.status==='Stable'){
+      interp.push('All monitored UV-Vis parameters are within tolerance. Colloidal stability is confirmed across the recorded scan history. The lot is cleared for use in assay development and conjugation workflows.');
+    } else if(qc.status==='Drifting'){
+      if(qc.drift>3)interp.push('Peak drift: '+qc.drift.toFixed(1)+' nm (warn >3 nm). May indicate early-stage aggregation or surface modification.');
+      if(qc.broad>8)interp.push('FWHM broadened +'+qc.broad.toFixed(1)+' nm. Increasing polydispersity.');
+      if(qc.ptDrop>0.5&&aLast&&aLast.peakTrough)interp.push('P:T ratio declined to '+aLast.peakTrough.toFixed(2)+'. Dimers or small aggregates likely.');
+      if(qc.tailRise>0.005)interp.push('700–900nm tail +'+qc.tailRise.toFixed(5)+' AU. Aggregate scatter signature.');
+      interp.push('Recommendation: Reduce re-scan interval. Confirm with DLS/TEM. Restrict to non-critical applications.');
+    } else if(qc.status==='Aggregating'){
+      if(qc.drift>5)interp.push('Peak drift '+qc.drift.toFixed(1)+' nm (danger >5 nm). Coupled plasmon resonance from large aggregates.');
+      if(qc.broad>15)interp.push('FWHM +'+qc.broad.toFixed(1)+' nm. Severely heterogeneous size distribution.');
+      if(qc.ptDrop>1)interp.push('P:T drop '+qc.ptDrop.toFixed(2)+'. Aggregate-dominated sample.');
+      interp.push('Recommendation: Quarantine immediately. Do not use. Request replacement lot and perform DLS/TEM characterization.');
+    }
+  } else {
+    interp.push('At least 2 scans are required to generate a stability interpretation. Record an incoming QC scan and a follow-up stability scan to establish a baseline.');
+  }
+  const sec5=el('div',{class:'rpt-section'},
+    el('div',{class:'rpt-section-title'},'Interpretation & Recommendations'),
+    el('div',{class:'rpt-note'},...interp.map(p=>el('p',{},p)))
+  );
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  const footer=el('div',{class:'rpt-footer'},
+    el('span',{},'AuTrack Nanoparticle QC · '+reportId),
+    el('span',{},'Generated '+reportDate+' · QC thresholds per nanoComposix UV-Vis guidelines')
+  );
+
+  return el('div',{class:'rpt'},
+    cover,
+    el('div',{class:'rpt-body-wrap'},
+      sec1,
+      sec2,
+      sec3||'',
+      sec4,
+      sec5
+    ),
+    footer
+  );
+}
+
+// ============================================================================
+// SCAN UPLOAD MODAL
+// ============================================================================
+function buildScanModal(){
+  const lot=DB.getLots().find(l=>l.id===S.lot);
+  if(!lot)return el('div',{});
+  let parsedData=null,previewAn=null,fileName='';
+  const today=new Date().toISOString().split('T')[0];
+  let scanDate=today,scanOp='',scanDil='1',scanNotes='',scanType='stability',scanDiluent='',scanMeasureMode='pedestal',scanVolume='2';
+  // Conjugate fields (post-conjugation only)
+  let conjAbCatalog='',conjAbLot='',conjAbSupplier='',conjType='passive',conjConc='',conjConcUnit='µg/mL';
+
+  const body=el('div',{class:'modal-body'});
+  const foot=el('div',{class:'modal-foot'});
+  const fileInput=el('input',{type:'file',accept:'.csv,.txt,.tsv',style:{display:'none'}});
+
+  function rebuild(){
+    body.innerHTML='';foot.innerHTML='';
+    body.appendChild(fileInput);
+
+    const zone=el('div',{class:'dropzone'+(parsedData?' loaded':''),onClick:()=>fileInput.click()},
+      el('div',{class:'dz-icon'},parsedData?'✓':'↑'),
+      parsedData
+        ?el('div',{},el('div',{class:'dz-title',style:{color:'var(--green)'}},fileName),el('div',{class:'dz-sub'},parsedData.length+' points · '+parsedData[0].wl+'–'+parsedData[parsedData.length-1].wl+' nm'))
+        :el('div',{},el('div',{class:'dz-title'},'Click to select NanoDrop file'),el('div',{class:'dz-sub'},'TSV · CSV · TXT — Wavelength + Absorbance'))
+    );
+    body.appendChild(zone);
+
+    if(previewAn){
+      const odC=previewAn.odPctChange!=null?(Math.abs(previewAn.odPctChange)>20?'var(--red)':Math.abs(previewAn.odPctChange)>10?'var(--amber)':'var(--green)'):'var(--text-2)';
+      body.appendChild(el('div',{class:'preview'},
+        el('div',{class:'preview-lbl'},'Scan preview'),
+        el('div',{class:'preview-row'},
+          el('div',{},el('div',{class:'pi-key'},'λ max'),el('div',{class:'pi-val',style:{color:'var(--gold)'}},previewAn.peakWl+' nm')),
+          el('div',{},el('div',{class:'pi-key'},'Abs max'),el('div',{class:'pi-val'},previewAn.maxAb+' AU')),
+          el('div',{},el('div',{class:'pi-key'},'ΔOD vs CoA'),el('div',{class:'pi-val',style:{color:odC}},previewAn.odPctChange!=null?(previewAn.odPctChange>0?'+':'')+previewAn.odPctChange+'%':'—')),
+          previewAn.fwhm?el('div',{},el('div',{class:'pi-key'},'FWHM'),el('div',{class:'pi-val'},previewAn.fwhm+' nm')):null,
+          previewAn.peakTrough?el('div',{},el('div',{class:'pi-key'},'Peak:Trough'),el('div',{class:'pi-val',style:{color:previewAn.peakTrough>=2.5?'var(--green)':previewAn.peakTrough>=1.5?'var(--amber)':'var(--red)'}},previewAn.peakTrough.toFixed(2))):null,
+          previewAn.tail!=null?el('div',{},el('div',{class:'pi-key'},'700–900nm Tail'),el('div',{class:'pi-val',style:{color:previewAn.tail<0.01?'var(--green)':previewAn.tail<0.03?'var(--amber)':'var(--red)'}},previewAn.tail.toFixed(4)+' AU')):null,
+          previewAn.protein280>0.01?el('div',{},el('div',{class:'pi-key'},'280nm Protein'),el('div',{class:'pi-val',style:{color:'var(--blue)'}},previewAn.protein280.toFixed(4)+' AU')):null,
+        )
+      ));
+    }
+
+    const dI=el('input',{class:'inp',type:'date',value:scanDate});dI.addEventListener('change',e=>scanDate=e.target.value);
+    const oI=el('input',{class:'inp',type:'text',placeholder:'Initials',value:scanOp});oI.addEventListener('input',e=>scanOp=e.target.value);
+    const dlI=el('input',{class:'inp',type:'number',value:scanDil,min:'0.01',step:'0.01'});dlI.addEventListener('input',e=>scanDil=e.target.value);
+    body.appendChild(el('div',{class:'frow'},
+      el('div',{class:'field'},el('label',{class:'lbl'},'Date'),dI),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Operator'),oI),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Dilution factor'),dlI)
+    ));
+
+    // Scan type selector
+    const stSel=el('select',{class:'inp'});
+    [['stability','Stability / Incoming QC'],['pre-conjugation','Pre-conjugation'],['post-conjugation','Post-conjugation']].forEach(([v,t])=>{
+      const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(scanType===v)opt.selected=true;stSel.appendChild(opt);
+    });
+    stSel.addEventListener('change',e=>{scanType=e.target.value;rebuild();});
+
+    // NanoDrop measurement mode
+    const mmSel=el('select',{class:'inp'});
+    [['pedestal','Pedestal (micro-volume)'],['cuvette','Cuvette']].forEach(([v,t])=>{
+      const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(scanMeasureMode===v)opt.selected=true;mmSel.appendChild(opt);
+    });
+    mmSel.addEventListener('change',e=>{
+      scanMeasureMode=e.target.value;
+      // Update volume options to match mode
+      volSel.innerHTML='';
+      const volOpts=scanMeasureMode==='pedestal'?[['1','1 µL'],['2','2 µL'],['custom','Custom']]:
+                                                  [['70','70 µL'],['700','700 µL'],['custom','Custom']];
+      volOpts.forEach(([v,t])=>{const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(scanVolume===v)opt.selected=true;volSel.appendChild(opt);});
+    });
+
+    const volOpts=scanMeasureMode==='pedestal'?[['1','1 µL'],['2','2 µL'],['custom','Custom']]:
+                                                [['70','70 µL'],['700','700 µL'],['custom','Custom']];
+    const volSel=el('select',{class:'inp'});
+    volOpts.forEach(([v,t])=>{const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(scanVolume===v)opt.selected=true;volSel.appendChild(opt);});
+    volSel.addEventListener('change',e=>scanVolume=e.target.value);
+
+    const diluentI=el('input',{class:'inp',type:'text',placeholder:'e.g., DI water, PBS',value:scanDiluent});
+    diluentI.addEventListener('input',e=>scanDiluent=e.target.value);
+
+    body.appendChild(el('div',{class:'frow'},
+      el('div',{class:'field'},el('label',{class:'lbl'},'Scan type'),stSel),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Measurement mode'),mmSel),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Sample volume'),volSel),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Diluent'),diluentI)
+    ));
+
+    // ── Post-conjugation antibody / conjugate fields ─────────────────────────
+    if(scanType==='post-conjugation'){
+      const conjBox=el('div',{class:'conj-box'});
+      conjBox.appendChild(el('div',{class:'conj-box-hdr'},
+        el('span',{class:'conj-box-icon'},'🔗'),
+        el('div',{},
+          el('div',{class:'conj-box-title'},'Conjugate Information'),
+          el('div',{class:'conj-box-sub'},'Required for post-conjugation scans')
+        )
+      ));
+
+      // Antibody fields row
+      const abCatI=el('input',{class:'inp',type:'text',placeholder:'e.g., ab12345',value:conjAbCatalog});
+      abCatI.addEventListener('input',e=>conjAbCatalog=e.target.value);
+      const abLotI=el('input',{class:'inp',type:'text',placeholder:'e.g., GR3241801-1',value:conjAbLot});
+      abLotI.addEventListener('input',e=>conjAbLot=e.target.value);
+      const abSupI=el('input',{class:'inp',type:'text',placeholder:'e.g., Abcam',value:conjAbSupplier});
+      abSupI.addEventListener('input',e=>conjAbSupplier=e.target.value);
+      conjBox.appendChild(el('div',{class:'frow'},
+        el('div',{class:'field'},el('label',{class:'lbl'},'Antibody Catalog #'),abCatI),
+        el('div',{class:'field'},el('label',{class:'lbl'},'Antibody Lot #'),abLotI),
+        el('div',{class:'field'},el('label',{class:'lbl'},'Antibody Supplier'),abSupI)
+      ));
+
+      // Conjugation type + concentration
+      const ctSel=el('select',{class:'inp'});
+      [['passive','Passive (physisorption)'],['covalent-edc','Covalent — EDC/NHS'],['covalent-nhs','Covalent — NHS Ester'],['covalent-other','Covalent — Other'],['streptavidin','Streptavidin-Biotin'],['neutravidin','NeutrAvidin-Biotin'],['protein-a','Protein A/G Oriented'],['click','Click Chemistry (SPAAC/CuAAC)'],['maleimide','Thiol-Maleimide'],['peg','PEGylated Conjugate'],['other','Other']].forEach(([v,t])=>{
+        const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(conjType===v)opt.selected=true;ctSel.appendChild(opt);
+      });
+      ctSel.addEventListener('change',e=>conjType=e.target.value);
+
+      const concI=el('input',{class:'inp',type:'text',placeholder:'e.g., 200',value:conjConc});
+      concI.addEventListener('input',e=>conjConc=e.target.value);
+
+      const unitSel=el('select',{class:'inp'});
+      ['µg/mL','mg/mL','nM','µM','OD','particles/mL','other'].forEach(u=>{
+        const opt=document.createElement('option');opt.value=u;opt.textContent=u;if(conjConcUnit===u)opt.selected=true;unitSel.appendChild(opt);
+      });
+      unitSel.addEventListener('change',e=>conjConcUnit=e.target.value);
+
+      conjBox.appendChild(el('div',{class:'frow'},
+        el('div',{class:'field',style:{flex:'2'}},el('label',{class:'lbl'},'Conjugation Type'),ctSel),
+        el('div',{class:'field',style:{flex:'1.2'}},el('label',{class:'lbl'},'Final Conc.'),concI),
+        el('div',{class:'field',style:{flex:'0.8'}},el('label',{class:'lbl'},'Unit'),unitSel)
+      ));
+
+      body.appendChild(conjBox);
+    }
+
+    const nI=el('input',{class:'inp',placeholder:'e.g., Monthly stability check',value:scanNotes});
+    nI.addEventListener('input',e=>scanNotes=e.target.value);
+    body.appendChild(el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),nI));
+
+    foot.appendChild(el('button',{class:'btn btn-ghost',onClick:()=>setState({modal:null})},'Cancel'));
+    foot.appendChild(el('button',{class:'btn btn-primary',style:{opacity:parsedData?'1':'0.38',pointerEvents:parsedData?'auto':'none'},
+      onClick:()=>{
+        if(!parsedData)return;
+        const df=Number(scanDil)||1;
+        const anM=Analytics.analyze(parsedData,lot.size,lot.od);
+        const corr=parsedData.map(p=>({wl:p.wl,ab:p.ab*df}));
+        const anC=Analytics.analyze(corr,lot.size,lot.od);
+        const scanObj={id:uid(),date:scanDate,op:scanOp,dil:df,notes:scanNotes,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()};
+        // Attach conjugate data for post-conjugation scans
+        if(scanType==='post-conjugation'){
+          const conjId='CONJ-'+Math.random().toString(36).slice(2,8).toUpperCase();
+          scanObj.conj={id:conjId,abCatalog:conjAbCatalog,abLot:conjAbLot,abSupplier:conjAbSupplier,conjType,conc:conjConc,concUnit:conjConcUnit,lotId:lot.id,lotNumber:lot.lotNumber,lotSize:lot.size};
+        }
+        DB.addScan(lot.id,scanObj);
+        setState({modal:null});
+      }},'Save Scan'));
+  }
+
+  fileInput.addEventListener('change',e=>{
+    const f=e.target.files[0];if(!f)return;
+    fileName=f.name;
+    const r=new FileReader();
+    r.onload=ev=>{
+      const res=parseFile(ev.target.result);
+      parsedData=res.data;
+      if(parsedData.length>0){
+        previewAn=Analytics.analyze(parsedData,lot.size,lot.od);
+        if(res.meta.measureDate)scanDate=res.meta.measureDate;
+        if(res.meta.sampleName&&!scanNotes)scanNotes=res.meta.sampleName;
+      }
+      rebuild();
+    };
+    r.readAsText(f);
+  });
+  rebuild();
+
+  const modal=el('div',{class:'modal',onClick:e=>e.stopPropagation()},
+    el('div',{class:'modal-hdr'},
+      el('div',{},el('div',{class:'modal-title'},'Upload UV-Vis Scan'),el('div',{class:'modal-sub'},lot.lotNumber+' · '+lot.size+' nm · CoA OD: '+lot.od)),
+      el('button',{class:'modal-close',onClick:()=>setState({modal:null})},'×')
+    ),body,foot
+  );
+  return el('div',{class:'overlay',onClick:()=>setState({modal:null})},modal);
+}
+
+// ============================================================================
+// LOT FORM MODAL (create & edit)
+// ============================================================================
+function buildLotFormModal(title,sub,initial,onSave,onCancel){
+  const form=Object.assign({},initial);
+  const body=el('div',{class:'modal-body'});
+
+  function field(lbl,key,type,opts){
+    type=type||'text';opts=opts||{};
+    let inp;
+    if(opts.select){
+      inp=el('select',{class:'inp'});
+      opts.select.forEach(o=>{const opt=document.createElement('option');opt.value=o;opt.textContent=o;if(String(form[key])===String(o))opt.selected=true;inp.appendChild(opt);});
+      inp.addEventListener('change',e=>form[key]=e.target.value);
+    } else {
+      inp=el('input',{class:'inp',type,value:form[key]||'',placeholder:opts.ph||''});
+      inp.addEventListener('input',e=>form[key]=e.target.value);
+    }
+    return el('div',{class:'field'},el('label',{class:'lbl'},lbl),inp);
+  }
+
+  body.appendChild(el('div',{class:'frow'},field('Supplier','supplier','text',{ph:'e.g., BBI Solutions'}),field('Lot Number','lotNumber','text',{ph:'e.g., GC40-2024-0891'}),field('Catalog Number','catalog','text',{ph:'e.g., GC40'})));
+  body.appendChild(el('div',{class:'frow'},field('Particle Size (nm)','size','number',{select:PARTICLE_SIZES.map(String)}),field('OD (as received)','od','number',{ph:'e.g., 1.0'}),field('Buffer','buffer','text',{ph:'e.g., Citrate, pH 7.0'})));
+  body.appendChild(el('div',{class:'frow'},field('Date Received','received','date'),field('Expiration Date','expires','date'),field('Storage','storage','text',{ph:'e.g., 4°C, dark'})));
+  const ta=el('textarea',{class:'inp',placeholder:'Additional notes…'});ta.value=form.notes||'';ta.addEventListener('input',e=>form.notes=e.target.value);
+  body.appendChild(el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),ta));
+
+  const foot=el('div',{class:'modal-foot'},
+    el('button',{class:'btn btn-ghost',onClick:onCancel},'Cancel'),
+    el('button',{class:'btn btn-primary',onClick:()=>onSave(form)},title.includes('Edit')?'Save Changes':'Register Lot')
+  );
+  const modal=el('div',{class:'modal',onClick:e=>e.stopPropagation()},
+    el('div',{class:'modal-hdr'},
+      el('div',{},el('div',{class:'modal-title'},title),sub?el('div',{class:'modal-sub'},sub):null),
+      el('button',{class:'modal-close',onClick:onCancel},'×')
+    ),body,foot
+  );
+  return el('div',{class:'overlay',onClick:onCancel},modal);
+}
+
+function buildEditModal(){
+  const lot=DB.getLots().find(l=>l.id===S.lot);
+  if(!lot)return el('div',{});
+  return buildLotFormModal('Edit Lot',lot.lotNumber,lot,form=>{
+    DB.updateLot(lot.id,Object.assign({},form,{size:Number(form.size),od:Number(form.od)}));
+    setState({modal:null});
+  },()=>setState({modal:null}));
+}
+
+function buildCreateModal(){
+  const def={supplier:'',lotNumber:'',catalog:'',size:40,od:'',buffer:'',received:'',expires:'',storage:'4°C, dark',notes:''};
+  return buildLotFormModal('Register New Lot',null,def,form=>{
+    if(!form.lotNumber||!form.supplier){alert('Lot number and supplier are required.');return;}
+    DB.addLot(Object.assign({},form,{id:uid(),size:Number(form.size),od:Number(form.od),created:Date.now()}));
+    setState({modal:null});
+  },()=>setState({modal:null}));
+}
+
+// ============================================================================
+// SETTINGS PAGE
+// ============================================================================
+// ============================================================================
+// INFO PAGE
+// ============================================================================
+function buildInfo(){
+  function sec(icon,title,sub,...children){
+    return el('div',{class:'info-section'},
+      el('div',{class:'info-section-header'},
+        el('div',{class:'info-section-icon'},icon),
+        el('div',{},el('div',{class:'info-section-title'},title),sub?el('div',{class:'info-section-sub'},sub):'')
+      ),
+      ...children
+    );
+  }
+  function p(...text){return el('p',{class:'info-p'},...text);}
+  function callout(...text){return el('div',{class:'info-callout'},...text);}
+  function kpiCard(name,unit,formula,desc){
+    return el('div',{class:'info-kpi-card'},
+      el('div',{class:'info-kpi-card-top'},
+        el('div',{class:'info-kpi-name'},name),
+        el('div',{class:'info-kpi-unit'},unit)
+      ),
+      formula?el('div',{class:'info-kpi-formula'},formula):'',
+      el('div',{class:'info-kpi-desc'},desc)
+    );
+  }
+  function badge(cls,txt){return el('span',{class:'info-badge '+cls},txt);}
+  function step(n,...content){return el('div',{class:'info-step'},el('div',{class:'info-step-num'},String(n)),el('div',{class:'info-step-body'},...content));}
+
+  // ── Overview ──
+  const s0=sec('📖','What is AuTrack?','Overview',
+    p('AuTrack is a gold nanoparticle (AuNP) quality control tracker for lateral flow assay development. It monitors colloidal stability over time by analyzing UV-Vis absorbance spectra and automatically flagging signs of aggregation or degradation.'),
+    p('Each lot of nanoparticles has its own scan history. As you add UV-Vis scans over time, AuTrack computes key spectral metrics, compares them to your lot\'s starting Certificate of Analysis (CoA) values, and determines whether the lot is ', el('strong',{},'Stable'), ', ', el('strong',{},'Drifting'), ', or ', el('strong',{},'Aggregating'), '.')
+  );
+
+  // ── UV-Vis Basics ──
+  const s1=sec('🌊','UV-Vis & Surface Plasmon Resonance','The science behind the measurements',
+    p('Gold nanoparticles absorb and scatter light with extraordinary efficiency due to ', el('strong',{},'Surface Plasmon Resonance (SPR)'), ' — a collective oscillation of conduction electrons at the particle surface when excited by light at specific wavelengths.'),
+    p('The SPR peak position and shape are highly sensitive to: (1) ', el('strong',{},'particle size'), ' — larger particles resonate at longer wavelengths; (2) ', el('strong',{},'aggregation state'), ' — aggregates red-shift and broaden the peak; (3) ', el('strong',{},'local refractive index'), ' — protein conjugation causes a small but detectable red-shift.'),
+    el('div',{class:'info-diagram'},
+      el('span',{class:'hi'},'Healthy 40nm AuNP spectrum:\n'),
+      '  Peak λmax  ~530 nm    ',el('span',{class:'ok'},'[Sharp, symmetric SPR peak]'),'\n',
+      '  FWHM       ~60-80 nm  ',el('span',{class:'ok'},'[Narrow = monodisperse]'),'\n',
+      '  P:T ratio   ≥ 2.5     ',el('span',{class:'ok'},'[High peak vs 480nm trough]'),'\n',
+      '  700-900nm   < 0.01 AU ',el('span',{class:'ok'},'[Flat baseline = no aggregates]'),'\n\n',
+      el('span',{class:'hi'},'Aggregating sample — what changes:\n'),
+      '  Peak λmax  shifts +5-15nm  ',el('span',{class:'danger'},'[Red-shifted = larger clusters]'),'\n',
+      '  FWHM       broadens +15nm+ ',el('span',{class:'danger'},'[Wide = polydisperse]'),'\n',
+      '  P:T ratio   drops < 1.5    ',el('span',{class:'danger'},'[Aggregates absorb at 480nm]'),'\n',
+      '  700-900nm   rises > 0.03   ',el('span',{class:'danger'},'[Scatter from large aggregates]')
+    )
+  );
+
+  // ── All KPIs ──
+  const s2=sec('📊','QC Metrics Explained','How each value is calculated and what it means',
+    el('div',{class:'info-kpi-grid'},
+      kpiCard('λ max','nm','wl of max absorbance (400-800nm)','The peak wavelength of the SPR band. For 40nm gold this is ~530nm. A red-shift (increase) over time indicates aggregation or surface modification from protein conjugation. Expect 2-3nm shift after successful conjugation — this is normal.'),
+      kpiCard('Abs max (OD)','AU','max absorbance in 400-800nm range','The optical density at the SPR peak. Drops over time if particles are lost (e.g. centrifugation, aggregation). Compared to your CoA OD to compute ΔOD%.'),
+      kpiCard('ΔOD vs CoA','%','(maxAb − CoA OD) / CoA OD × 100','Percentage change in peak OD compared to the lot\'s Certificate of Analysis starting value. Negative = OD loss (particle concentration decrease). Values beyond ±20% indicate significant change. Note: always set the CoA OD in the lot settings for this to be meaningful.'),
+      kpiCard('FWHM','nm','right half-max wl − left half-max wl','Full-Width at Half-Maximum of the SPR peak. Measures peak sharpness — a narrow FWHM indicates a monodisperse population. Broadening over time is an early aggregation indicator even before the peak visibly shifts.'),
+      kpiCard('Peak:Trough Ratio','ratio','abs @ λmax / abs @ 480nm','The ratio of the SPR peak absorbance to the absorbance at 480nm (the "trough" between the UV and SPR peaks). A high ratio (≥2.5) means a sharp, pure SPR peak. As aggregates form, they absorb broadly including at 480nm, lowering this ratio. This is nanoComposix\'s preferred primary metric.'),
+      kpiCard('700-900nm Tail','AU','mean abs over 700-900nm','Average absorbance in the long-wavelength tail region. Healthy gold nanoparticles have near-zero absorbance here. As aggregates form, they produce broad light scattering that elevates the baseline across the entire spectrum. This is the most sensitive early indicator of aggregation.'),
+      kpiCard('280nm Protein Abs','AU','max abs in 270-290nm range','Absorbance at 280nm primarily indicates aromatic amino acid residues in proteins (Trp, Tyr). After conjugation, an elevated 280nm signal indicates free protein in the diluent/storage buffer — unconjugated antibody that didn\'t bind to particles.'),
+      kpiCard('Δ Theoretical λ','%','(λmax − theory) / theory × 100','Percentage deviation of the measured peak wavelength from the Mie theory prediction for this particle size. Small deviations (±1%) are normal and expected after conjugation. Large deviations suggest measurement error or unusual sample conditions.')
+    )
+  );
+
+  // ── Dilution-Corrected Abs ──
+  const s3=sec('🔬','Dilution-Corrected Absorbance','What the toggle does and when to use it',
+    callout(el('strong',{},'When you measure a sample at a dilution factor of e.g. 2×, your instrument reads half the true OD. '), 'Dilution-corrected mode multiplies all absorbance values by the dilution factor to show the estimated true particle OD, as if the sample had been measured undiluted.'),
+    p('According to Beer-Lambert Law: ', el('strong',{},'A_true = A_measured × dilution factor'), '. This correction is especially important when comparing scans measured at different dilutions, or when comparing your measured OD to the CoA value (which is typically measured undiluted).'),
+    el('div',{class:'info-two-col'},
+      el('div',{},
+        p(el('strong',{},'Use Measured Abs when:')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num',style:{background:'#C8D0E0',color:'#333'}},'→'),el('div',{class:'info-step-body'},'All your scans use the same dilution factor (or 1×)')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num',style:{background:'#C8D0E0',color:'#333'}},'→'),el('div',{class:'info-step-body'},'You want to see raw instrument readings for reproducibility')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num',style:{background:'#C8D0E0',color:'#333'}},'→'),el('div',{class:'info-step-body'},'Your absorbance is already within the linear range (< 1.5 AU) without dilution'))
+      ),
+      el('div',{},
+        p(el('strong',{},'Use Dilution-Corrected Abs when:')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num'},'→'),el('div',{class:'info-step-body'},'You measured concentrated samples at 2× or higher dilution to stay within instrument range')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num'},'→'),el('div',{class:'info-step-body'},'You want to compare OD values across scans taken at different dilutions')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num'},'→'),el('div',{class:'info-step-body'},'You are tracking OD changes relative to the CoA (which is measured undiluted)'))
+      )
+    ),
+    p(el('strong',{},'Important: '), 'Shape-based metrics (FWHM, Peak:Trough, peak wavelength, tail) are ', el('strong',{},'not affected'), ' by dilution because they depend on spectral shape, not absolute OD. Only magnitude-based metrics (Abs max, ΔOD%) change meaningfully in corrected mode.')
+  );
+
+  // ── Longitudinal Trend Charts ──
+  const s4=sec('📈','Longitudinal Trend Charts','How to read the time-series stability charts',
+    p('The trend charts in the Lot Detail view plot each QC metric over time. Each data point is one UV-Vis scan. The charts help you spot gradual drift that might not be obvious from a single spectrum.'),
+    el('div',{class:'info-two-col'},
+      el('div',{},
+        p(el('strong',{},'λ max over time')),
+        p('Should be flat or show a single 2-3nm step after conjugation. A continuous upward drift indicates progressive aggregation. The red threshold line (if configured) marks your danger limit.'),
+        p(el('strong',{},'FWHM over time')),
+        p('Should be flat or slightly increase after conjugation. A steadily rising FWHM is often the first observable signal of polydispersity developing.')
+      ),
+      el('div',{},
+        p(el('strong',{},'Peak:Trough over time')),
+        p('Should remain stable or show a small drop after conjugation. A declining P:T ratio indicates absorption growing at 480nm — aggregates are forming. This is typically the most sensitive leading indicator.'),
+        p(el('strong',{},'700-900nm Tail over time')),
+        p('Any sustained upward trend in the long-wavelength baseline is a strong aggregation signal. Even small elevations (0.005-0.02 AU) warrant increased monitoring frequency.')
+      )
+    )
+  );
+
+  // ── Status Verdicts ──
+  const s5=sec('🚦','QC Status Logic','How Stable / Drifting / Aggregating is determined',
+    p('The QC verdict is automatically computed by comparing your scan history against configurable thresholds (adjustable in Settings). Four signals are monitored:'),
+    el('table',{class:'info-threshold-table'},
+      el('thead',{},el('tr',{},...['Signal','Formula','Warn threshold','Danger threshold'].map(h=>el('th',{},h)))),
+      el('tbody',{},
+        el('tr',{},el('td',{},'Peak drift'),el('td',{},'|λmax_last − λmax_first|'),el('td',{},badge('warn','> 3 nm')),el('td',{},badge('danger','> 5 nm'))),
+        el('tr',{},el('td',{},'FWHM broadening'),el('td',{},'FWHM_last − FWHM_first'),el('td',{},badge('warn','> 8 nm')),el('td',{},badge('danger','> 15 nm'))),
+        el('tr',{},el('td',{},'P:T drop'),el('td',{},'PT_first − PT_last'),el('td',{},badge('warn','> 0.5')),el('td',{},badge('danger','> 1.0'))),
+        el('tr',{},el('td',{},'Tail elevation'),el('td',{},'tail_last − tail_first'),el('td',{},badge('warn','> 0.005 AU')),el('td',{},badge('danger','> 0.02 AU')))
+      )
+    ),
+    el('div',{style:{marginTop:'16px',display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px'}},
+      el('div',{style:{background:'#F0FDF6',border:'1px solid rgba(26,158,96,0.3)',borderRadius:'6px',padding:'14px'}},
+        el('div',{style:{fontSize:'13px',fontWeight:'700',color:'#1A9E60',marginBottom:'6px'}},'● Stable — Pass'),
+        el('div',{style:{fontSize:'12px',color:'#333',lineHeight:'1.5'}},'All 4 signals are below their warning thresholds. Lot is cleared for use in conjugation and assay development.')
+      ),
+      el('div',{style:{background:'#FFF9F0',border:'1px solid rgba(192,112,32,0.3)',borderRadius:'6px',padding:'14px'}},
+        el('div',{style:{fontSize:'13px',fontWeight:'700',color:'#C07020',marginBottom:'6px'}},'◐ Drifting — Monitor'),
+        el('div',{style:{fontSize:'12px',color:'#333',lineHeight:'1.5'}},'One or more signals exceeded a warn threshold but no danger thresholds yet. Reduce scan interval, consider DLS confirmation, restrict to non-critical use.')
+      ),
+      el('div',{style:{background:'#FFF5F5',border:'1px solid rgba(200,60,60,0.3)',borderRadius:'6px',padding:'14px'}},
+        el('div',{style:{fontSize:'13px',fontWeight:'700',color:'#C83C3C',marginBottom:'6px'}},'▲ Aggregating — Fail'),
+        el('div',{style:{fontSize:'12px',color:'#333',lineHeight:'1.5'}},'One or more danger thresholds exceeded. Quarantine immediately. Do not use in production assays. Perform DLS/TEM confirmation and request a replacement lot.')
+      )
+    )
+  );
+
+  // ── Workflow ──
+  const s6=sec('🔄','Recommended QC Workflow','Best practices for AuNP stability monitoring',
+    step(1,el('strong',{},'Incoming QC (Day 0): '),'When you receive a new lot, record the CoA OD in the lot settings, then immediately upload an initial UV-Vis scan as a baseline. This is your reference point for all future comparisons. Use the same dilution every time for consistency.'),
+    step(2,el('strong',{},'Pre-conjugation scan: '),'Before each conjugation run, scan the stock particle suspension. Compare λmax, P:T, and OD to your incoming scan. Any significant drift at this point suggests storage degradation.'),
+    step(3,el('strong',{},'Post-conjugation scan: '),'After conjugation and buffer exchange, scan the conjugate. A 2-3nm red-shift in λmax is expected and indicates successful surface coating. The 280nm peak should be low (< 0.05 AU) indicating minimal free protein.'),
+    step(4,el('strong',{},'Stability monitoring: '),'Scan at regular intervals (e.g. weekly for the first month, then monthly). Use the Drifting verdict as your trigger to increase monitoring frequency. Use Aggregating as your quarantine trigger.'),
+    step(5,el('strong',{},'Compare lots: '),'Use the Compare view to overlay spectra from multiple lots side-by-side. Useful for batch-to-batch QC and selecting the best lot for a critical assay run.'),
+    callout(el('strong',{},'Pro tip: '), 'The 700-900nm tail is often the most sensitive early aggregation indicator — rising before the peak visibly shifts. Make it your first check when scanning a lot you haven\'t used in a while.')
+  );
+
+  // ── Scan Types ──
+  const s7=sec('🏷','Scan Types','What each scan type tag means',
+    p('When uploading a scan, you can tag it as one of three types to help organize your scan history:'),
+    el('div',{class:'info-two-col'},
+      el('div',{},
+        p(el('strong',{},'Stability scan '), '(default) — A routine QC check of the unconjugated particle stock. Use this for all incoming QC and scheduled stability monitoring.'),
+        p(el('strong',{},'Pre-conjugation scan '), '— Scan of the particle stock taken immediately before a conjugation run. Establishes a clean baseline to compare against the post-conjugation result.')
+      ),
+      el('div',{},
+        p(el('strong',{},'Post-conjugation scan '), '— Scan of the finished conjugate after completing the conjugation protocol and buffer exchange. Look for the characteristic 2-3nm red-shift and low 280nm signal.')
+      )
+    )
+  );
+
+  return el('div',{class:'info-page'},
+    el('div',{class:'info-hero'},
+      el('div',{style:{display:'flex',alignItems:'center',gap:'12px',marginBottom:'10px'}},
+        el('button',{class:'btn btn-ghost btn-sm',style:{color:'rgba(200,168,75,0.7)',border:'1px solid rgba(200,168,75,0.3)'},onClick:()=>setState({view:'dashboard'})},'← Back'),
+      ),
+      el('div',{class:'info-hero-title'},'AuTrack Reference Guide'),
+      el('div',{class:'info-hero-sub'},'How the app works · KPI definitions · QC thresholds · Best practices')
+    ),
+    el('div',{class:'info-body'},s0,s1,s2,s3,s4,s5,s6,s7)
+  );
+}
+
+// ============================================================================
+// CONJUGATES TAB
+// ============================================================================
+function buildConjugates(){
+  const lots=DB.getLots();
+  // Gather all conjugate records from all lots
+  const allConj=[];
+  lots.forEach(lot=>{
+    DB.getScans(lot.id).forEach(scan=>{
+      if(scan.conj){
+        const a=scan.an||{};
+        allConj.push({scan,lot,conj:scan.conj,an:a});
+      }
+    });
+  });
+  // Sort newest first
+  allConj.sort((a,b)=>new Date(b.scan.date)-new Date(a.scan.date));
+
+  const conjTypeLabels={
+    'passive':'Passive (physisorption)',
+    'covalent-edc':'Covalent — EDC/NHS',
+    'covalent-nhs':'Covalent — NHS Ester',
+    'covalent-other':'Covalent — Other',
+    'streptavidin':'Streptavidin-Biotin',
+    'neutravidin':'NeutrAvidin-Biotin',
+    'protein-a':'Protein A/G Oriented',
+    'click':'Click Chemistry',
+    'maleimide':'Thiol-Maleimide',
+    'peg':'PEGylated Conjugate',
+    'other':'Other'
+  };
+
+  const q=(S.conjSearch||'').toLowerCase();
+  const typeFilter=S.conjTypeFilter||'all';
+
+  const filtered=allConj.filter(r=>{
+    const c=r.conj;
+    const matchQ=!q||(c.id||'').toLowerCase().includes(q)||(c.abCatalog||'').toLowerCase().includes(q)||(c.abSupplier||'').toLowerCase().includes(q)||(c.abLot||'').toLowerCase().includes(q)||(r.lot.lotNumber||'').toLowerCase().includes(q);
+    const matchType=typeFilter==='all'||c.conjType===typeFilter;
+    return matchQ&&matchType;
+  });
+
+  // Stats bar
+  const uniqueAbs=new Set(allConj.map(r=>r.conj.abCatalog).filter(Boolean)).size;
+  const uniqueLots=new Set(allConj.map(r=>r.lot.id)).size;
+  const typeSet=new Set(allConj.map(r=>r.conj.conjType).filter(Boolean));
+
+  const statsBar=allConj.length?el('div',{class:'conj-stats-bar'},
+    el('div',{class:'conj-stat'},el('div',{class:'conj-stat-v'},allConj.length),el('div',{class:'conj-stat-k'},'Total Conjugates')),
+    el('div',{class:'conj-stat'},el('div',{class:'conj-stat-v'},uniqueAbs),el('div',{class:'conj-stat-k'},'Unique Antibodies')),
+    el('div',{class:'conj-stat'},el('div',{class:'conj-stat-v'},uniqueLots),el('div',{class:'conj-stat-k'},'Lots Used')),
+    el('div',{class:'conj-stat'},el('div',{class:'conj-stat-v'},typeSet.size),el('div',{class:'conj-stat-k'},'Conjugation Methods'))
+  ):null;
+
+  // Filter row
+  const searchInp=el('input',{class:'search',style:{flex:'1',maxWidth:'320px'},placeholder:'Search by conjugate ID, antibody catalog, supplier, lot…',value:S.conjSearch||''});
+  searchInp.addEventListener('input',e=>setState({conjSearch:e.target.value}));
+
+  const typeSel=el('select',{class:'inp',style:{fontSize:'12px',maxWidth:'220px'}});
+  [['all','All conjugation types'],...Object.entries(conjTypeLabels)].forEach(([v,t])=>{
+    const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(typeFilter===v)opt.selected=true;typeSel.appendChild(opt);
+  });
+  typeSel.addEventListener('change',e=>setState({conjTypeFilter:e.target.value}));
+
+  const filterRow=el('div',{class:'conj-search-row'},searchInp,typeSel);
+
+  // Cards — collapsed list rows that expand on click
+  function mkCard(r){
+    const {scan,lot,conj,an}=r;
+    const qcPtC=an.peakTrough>=2.5?'var(--green)':an.peakTrough>=1.5?'var(--amber)':'var(--red)';
+    const conjTypeLabel=conjTypeLabels[conj.conjType]||conj.conjType||'—';
+
+    let expanded=(S.openConj&&S.openConj===conj.id)||false;
+    const card=el('div',{class:'conj-list-item',style:{cursor:'pointer'}});
+    // Scroll into view if this is the targeted card
+    if(S.openConj===conj.id){
+      setTimeout(()=>{card.scrollIntoView({behavior:'smooth',block:'center'});S.openConj=null;},100);
+    }
+
+    function buildRow(){
+      card.innerHTML='';
+
+      // ── Collapsed row: just ID + date + chevron ──────────────────────────
+      const row=el('div',{class:'conj-list-row',style:{
+        display:'flex',alignItems:'center',gap:'16px',padding:'13px 18px',userSelect:'none'
+      }},
+        // ID badge
+        el('span',{style:{fontFamily:'var(--mono)',fontSize:'12px',fontWeight:'700',color:'var(--gold)',letterSpacing:'0.04em',flexShrink:'0'}},conj.id),
+        // date
+        el('span',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--text-3)',flexShrink:'0'}},fmtDate(scan.date)),
+        el('div',{style:{flex:'1'}}),
+        // type pill
+        el('span',{class:'conj-type-pill',style:{flexShrink:'0'}},conjTypeLabel),
+        // chevron
+        el('span',{style:{fontSize:'11px',color:'var(--text-3)',marginLeft:'8px',flexShrink:'0',transition:'transform 0.15s',transform:expanded?'rotate(180deg)':'rotate(0deg)'}}, '▼')
+      );
+      card.appendChild(row);
+
+      // ── Expanded detail ──────────────────────────────────────────────────
+      if(expanded){
+        const detail=el('div',{style:{borderTop:'1px solid var(--border)',background:'var(--surface)'}});
+
+        // ─ 3-column panel: Gold | Antibody | Conjugate/Concentration ─
+        const linkPanel=el('div',{style:{
+          display:'grid',gridTemplateColumns:'1fr 1fr 1fr',
+          borderBottom:'1px solid var(--border)'
+        }});
+
+        // Gold column
+        const goldSide=el('div',{style:{padding:'14px 18px',display:'flex',flexDirection:'column',gap:'9px',borderRight:'1px solid var(--border)'}},
+          el('div',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--gold)',textTransform:'uppercase',letterSpacing:'0.14em',marginBottom:'2px'}},'Gold Nanoparticle'),
+          mkField('Lot Number', lot.lotNumber, 'var(--gold)'),
+          mkField('Catalog #',  lot.catalog||'—'),
+          mkField('Supplier',   lot.supplier||'—'),
+          mkField('Size',       lot.size+' nm'),
+        );
+
+        // Antibody column
+        const abSide=el('div',{style:{padding:'14px 18px',display:'flex',flexDirection:'column',gap:'9px',borderRight:'1px solid var(--border)'}},
+          el('div',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--purple)',textTransform:'uppercase',letterSpacing:'0.14em',marginBottom:'2px'}},'Antibody'),
+          mkField('Catalog #',  conj.abCatalog||'—', 'var(--purple)'),
+          mkField('Lot #',      conj.abLot||'—'),
+          mkField('Supplier',   conj.abSupplier||'—'),
+          mkField('Method',     conjTypeLabel),
+        );
+
+        // Concentration / conjugate column
+        const concSide=el('div',{style:{padding:'14px 18px',display:'flex',flexDirection:'column',gap:'9px'}},
+          el('div',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--blue)',textTransform:'uppercase',letterSpacing:'0.14em',marginBottom:'2px'}},'Conjugate'),
+          mkField('Final Conc.', conj.conc?(conj.conc+' '+(conj.concUnit||'µg/mL')):'—', 'var(--blue)'),
+          mkField('Scan Date',   fmtDate(scan.date)),
+          mkField('Operator',    scan.op||'—'),
+          mkField('Diluent',     scan.diluent||'—'),
+        );
+
+        linkPanel.appendChild(goldSide);
+        linkPanel.appendChild(abSide);
+        linkPanel.appendChild(concSide);
+        detail.appendChild(linkPanel);
+
+        // ─ KPI metrics footer — compact single row ─
+        const kpis=[];
+        if(an.peakWl)kpis.push({k:'λ max',v:an.peakWl+' nm',c:'var(--gold)'});
+        if(an.maxAb!=null)kpis.push({k:'Abs',v:an.maxAb+' AU',c:'var(--text)'});
+        if(an.fwhm)kpis.push({k:'FWHM',v:an.fwhm+' nm',c:'var(--purple)'});
+        if(an.peakTrough)kpis.push({k:'P:T',v:an.peakTrough.toFixed(2),c:qcPtC});
+        if(an.protein280>0.01)kpis.push({k:'280nm',v:an.protein280.toFixed(4),c:'var(--blue)'});
+
+        const kpiFooter=el('div',{style:{display:'flex',alignItems:'center',borderTop:'1px solid var(--border)'}},
+          el('div',{style:{
+            fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text-3)',textTransform:'uppercase',
+            letterSpacing:'0.1em',padding:'7px 14px',borderRight:'1px solid var(--border)',
+            flexShrink:'0',whiteSpace:'nowrap'
+          }},'Key Metrics'),
+          ...kpis.map(k=>el('div',{style:{
+            padding:'5px 14px',borderRight:'1px solid var(--border)',
+            display:'flex',alignItems:'baseline',gap:'5px',flexShrink:'0'
+          }},
+            el('span',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.06em'}},k.k),
+            el('span',{style:{fontFamily:'var(--mono)',fontSize:'13px',fontWeight:'600',color:k.c}},k.v)
+          )),
+          el('div',{style:{flex:'1'}}),
+          el('button',{
+            class:'btn btn-ghost btn-sm',
+            style:{margin:'4px 10px',flexShrink:'0'},
+            onClick:e=>{e.stopPropagation();setState({view:'detail',lot:lot.id});}
+          },'View Lot →')
+        );
+        detail.appendChild(kpiFooter);
+        card.appendChild(detail);
+      }
+
+      card.onclick=()=>{expanded=!expanded;buildRow();};
+    }
+
+    buildRow();
+    return card;
+  }
+
+  // Helper: field with label+value stacked
+  function mkField(label,value,valColor){
+    return el('div',{style:{display:'flex',flexDirection:'column',gap:'2px'}},
+      el('div',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.09em'}},label),
+      el('div',{style:{fontSize:'12px',color:valColor||'var(--text)',fontWeight:'500',fontFamily:'var(--mono)'}},value)
+    );
+  }
+  // Helper: horizontal meta cell
+  function mkMetaCell(label,value){
+    return el('div',{style:{padding:'10px 18px',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:'2px',flexShrink:'0'}},
+      el('div',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.09em'}},label),
+      el('div',{style:{fontSize:'12px',color:'var(--text)',fontWeight:'500'}},value)
+    );
+  }
+
+  const listHeader=filtered.length?el('div',{style:{display:'flex',alignItems:'center',gap:'16px',padding:'7px 18px',borderBottom:'1px solid var(--border)',background:'var(--bg)'}},
+    el('span',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.1em',flex:'1'}},'Conjugate ID · Date'),
+    el('span',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.1em'}},'Type')
+  ):null;
+
+  const grid=el('div',{class:'pnl',style:{overflow:'hidden'}},
+    filtered.length
+      ?el('div',{},...(listHeader?[listHeader]:[]),...filtered.map(mkCard))
+      :el('div',{class:'conj-empty'},
+          el('div',{class:'conj-empty-icon'},allConj.length?'🔍':'🔗'),
+          el('div',{class:'conj-empty-msg'},allConj.length
+            ?'No conjugates match your search.'
+            :'No post-conjugation scans recorded yet. Upload a post-conjugation scan on any lot to create a conjugate record here.')
+        )
+  );
+
+  return el('div',{class:'page'},
+    el('div',{class:'conj-page'},
+      el('div',{class:'conj-page-hdr'},
+        el('div',{},
+          el('div',{class:'conj-page-title'},'Conjugate Registry'),
+          el('div',{class:'conj-page-sub'},'All post-conjugation records across all lots')
+        )
+      ),
+      statsBar||'',
+      filterRow,
+      grid
+    )
+  );
+}
+
+// ============================================================================
+function buildSettings(){
+  const cfg=CFG.get();
+  function numField(lbl,sub,key,min,max,step){
+    const inp=el('input',{class:'inp setting-inp',type:'number',value:cfg[key],min,max,step:step||1});
+    inp.addEventListener('change',e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){CFG.set({[key]:v});Object.assign(cfg,CFG.get());}});
+    return el('div',{class:'setting-row'},
+      el('div',{},el('div',{class:'setting-lbl'},lbl),el('div',{class:'setting-sub'},sub)),
+      inp
+    );
+  }
+
+  const themeRow=el('div',{class:'setting-row'},
+    el('div',{},el('div',{class:'setting-lbl'},'Color Theme'),el('div',{class:'setting-sub'},'Dark or light interface')),
+    (()=>{
+      const d=el('button',{class:'seg-btn'+(cfg.theme==='dark'?' on':'')},'🌙 Dark');
+      const l=el('button',{class:'seg-btn'+(cfg.theme==='light'?' on':'')},'☀ Light');
+      d.addEventListener('click',()=>{CFG.set({theme:'dark'});document.body.classList.remove('light');render();});
+      l.addEventListener('click',()=>{CFG.set({theme:'light'});document.body.classList.add('light');render();});
+      return el('div',{class:'seg'},d,l);
+    })()
+  );
+
+  const expiryWarnRow=el('div',{class:'setting-row'},
+    el('div',{},el('div',{class:'setting-lbl'},'Expiry warning threshold'),el('div',{class:'setting-sub'},'Days before expiry to show warning badge')),
+    (()=>{
+      const inp=el('input',{class:'inp setting-inp',type:'number',value:cfg.expiryWarnDays,min:'7',max:'365'});
+      inp.addEventListener('change',e=>{const v=parseInt(e.target.value);if(!isNaN(v)&&v>0){CFG.set({expiryWarnDays:v});}});
+      return inp;
+    })()
+  );
+
+  return el('div',{class:'page'},
+    el('div',{class:'pnl'},
+      el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},'Settings')),
+      el('div',{class:'pnl-body'},
+        el('div',{class:'srule'},el('span',{class:'srule-txt'},'Appearance'),el('div',{class:'srule-line'})),
+        themeRow,
+        el('div',{class:'srule'},el('span',{class:'srule-txt'},'QC Thresholds — Peak Drift'),el('div',{class:'srule-line'})),
+        el('div',{class:'settings-grid'},
+          numField('Drift warning','Peak shift (nm) to flag as Drifting','driftWarn','0.5','20','0.5'),
+          numField('Drift danger','Peak shift (nm) to flag as Aggregating','driftDanger','1','30','0.5'),
+        ),
+        el('div',{class:'srule'},el('span',{class:'srule-txt'},'QC Thresholds — FWHM Broadening'),el('div',{class:'srule-line'})),
+        el('div',{class:'settings-grid'},
+          numField('FWHM warning','FWHM broadening (nm) to flag as Drifting','fwhmWarn','1','50','1'),
+          numField('FWHM danger','FWHM broadening (nm) to flag as Aggregating','fwhmDanger','2','100','1'),
+        ),
+        el('div',{class:'srule'},el('span',{class:'srule-txt'},'QC Thresholds — Peak:Trough Ratio Drop'),el('div',{class:'srule-line'})),
+        el('div',{style:{padding:'0 0 8px 0',color:'var(--text-3)',fontSize:'12px'}},'Tracks the ratio of SPR peak to abs@480nm. A drop indicates aggregates absorbing at 480nm. Gold standard for stable 40–80nm AuNPs: ≥2.5'),
+        el('div',{class:'settings-grid'},
+          numField('P:T drop warning','Ratio drop to flag as Drifting (recommend: 0.5)','ptDropWarn','0.1','5','0.1'),
+          numField('P:T drop danger','Ratio drop to flag as Aggregating (recommend: 1.0)','ptDropDanger','0.2','10','0.1'),
+        ),
+        el('div',{class:'srule'},el('span',{class:'srule-txt'},'QC Thresholds — Long-Wavelength Tail (700–900nm)'),el('div',{class:'srule-line'})),
+        el('div',{style:{padding:'0 0 8px 0',color:'var(--text-3)',fontSize:'12px'}},'Elevated baseline at 700–900nm indicates scatter from aggregates. Stable particles typically show a very low, flat baseline in this region.'),
+        el('div',{class:'settings-grid'},
+          numField('Tail rise warning','Mean 700–900nm AU rise to flag Drifting (recommend: 0.005)','tailRiseWarn','0.001','0.1','0.001'),
+          numField('Tail rise danger','Mean 700–900nm AU rise to flag Aggregating (recommend: 0.02)','tailRiseDanger','0.002','0.5','0.001'),
+        ),
+        el('div',{class:'srule'},el('span',{class:'srule-txt'},'Alerts'),el('div',{class:'srule-line'})),
+        expiryWarnRow,
+        el('div',{style:{height:'8px'}})
+      )
+    ),
+    el('div',{class:'pnl'},
+      el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},'About')),
+      el('div',{class:'pnl-body'},
+        el('div',{style:{display:'flex',gap:'28px',flexWrap:'wrap'}},
+          el('div',{},el('div',{class:'coa-k'},'App'),el('div',{class:'coa-v'},'AuTrack')),
+          el('div',{},el('div',{class:'coa-k'},'Version'),el('div',{class:'coa-v'},'3.0 — nanoComposix analytics')),
+          el('div',{},el('div',{class:'coa-k'},'Storage'),el('div',{class:'coa-v'},'localStorage')),
+          el('div',{},el('div',{class:'coa-k'},'Lots stored'),el('div',{class:'coa-v'},DB.getLots().length)),
+        )
+      )
+    )
+  );
+}
+
+// ============================================================================
+// PASTE RAW DATA MODAL
+// ============================================================================
+function buildPasteModal(){
+  const lot=DB.getLots().find(l=>l.id===S.lot);
+  if(!lot)return el('div',{});
+  let parsedData=null,previewAn=null;
+  const today=new Date().toISOString().split('T')[0];
+  let scanDate=today,scanOp='',scanDil='1',scanNotes='',scanType='stability',scanDiluent='',scanMeasureMode='pedestal',scanVolume='2';
+
+  const body=el('div',{class:'modal-body'});
+  const foot=el('div',{class:'modal-foot'});
+  let parseMsg=null;
+
+  function tryParse(text){
+    if(!text.trim()){parsedData=null;previewAn=null;parseMsg=null;return;}
+    const res=parseFile(text);
+    parsedData=res.data;
+    if(parsedData.length>0){
+      previewAn=Analytics.analyze(parsedData,lot.size,lot.od);
+      parseMsg={ok:true,msg:parsedData.length+' points · '+parsedData[0].wl+'–'+parsedData[parsedData.length-1].wl+' nm'};
+    } else {
+      parsedData=null;previewAn=null;
+      parseMsg={ok:false,msg:'No valid wavelength/absorbance pairs found'};
+    }
+  }
+
+  function rebuild(){
+    body.innerHTML='';foot.innerHTML='';
+
+    body.appendChild(el('div',{class:'field',style:{marginBottom:'12px'}},
+      el('label',{class:'lbl'},'Paste wavelength + absorbance data'),
+      (()=>{
+        const ta=el('textarea',{class:'paste-area',placeholder:'400\t0.123\n401\t0.125\n...\nor CSV: 400,0.123\n\nSupports TSV, CSV, space-separated, or NanoDrop export format.'});
+        ta.addEventListener('input',e=>{tryParse(e.target.value);updatePreview();});
+        return ta;
+      })()
+    ));
+
+    function updatePreview(){
+      const old=body.querySelector('.parse-preview');if(old)old.remove();
+      if(!parseMsg)return;
+      const prev=el('div',{class:'parse-preview'},
+        el('span',{class:parseMsg.ok?'parse-ok':'parse-err'},parseMsg.ok?'✓ ':'✗ ',parseMsg.msg)
+      );
+      if(previewAn){
+        const odC=previewAn.odPctChange!=null?(Math.abs(previewAn.odPctChange)>20?'var(--red)':Math.abs(previewAn.odPctChange)>10?'var(--amber)':'var(--green)'):'var(--text-2)';
+        prev.appendChild(el('span',{style:{color:'var(--text-3)'}},'\u00A0·\u00A0'));
+        prev.appendChild(el('span',{},el('span',{style:{color:'var(--text-3)'}},'\u03BB max: '),el('span',{style:{color:'var(--gold)',fontWeight:'500'}},previewAn.peakWl+' nm')));
+        prev.appendChild(el('span',{style:{color:'var(--text-3)'}},'\u00A0·\u00A0'));
+        prev.appendChild(el('span',{},el('span',{style:{color:'var(--text-3)'}},'Abs: '),el('span',{},previewAn.maxAb+' AU')));
+        if(previewAn.odPctChange!=null){prev.appendChild(el('span',{style:{color:'var(--text-3)'}},'\u00A0·\u00A0'));prev.appendChild(el('span',{style:{color:odC}},'\u0394OD: '+(previewAn.odPctChange>0?'+':'')+previewAn.odPctChange+'%'));}
+        if(previewAn.peakTrough){prev.appendChild(el('span',{style:{color:'var(--text-3)'}},'\u00A0·\u00A0'));prev.appendChild(el('span',{},el('span',{style:{color:'var(--text-3)'}},'P:T: '),el('span',{style:{color:previewAn.peakTrough>=2.5?'var(--green)':previewAn.peakTrough>=1.5?'var(--amber)':'var(--red)'}},previewAn.peakTrough.toFixed(2))));}
+        if(previewAn.tail!=null){prev.appendChild(el('span',{style:{color:'var(--text-3)'}},'\u00A0·\u00A0'));prev.appendChild(el('span',{style:{color:previewAn.tail<0.01?'var(--green)':previewAn.tail<0.03?'var(--amber)':'var(--red)'}},'Tail: '+previewAn.tail.toFixed(4)));}
+        if(previewAn.protein280>0.01){prev.appendChild(el('span',{style:{color:'var(--text-3)'}},'\u00A0·\u00A0'));prev.appendChild(el('span',{style:{color:'var(--blue)'}},'280nm: '+previewAn.protein280.toFixed(4)));}
+      }
+      body.appendChild(prev);
+    }
+
+    const dI=el('input',{class:'inp',type:'date',value:scanDate});dI.addEventListener('change',e=>scanDate=e.target.value);
+    const oI=el('input',{class:'inp',type:'text',placeholder:'Initials',value:scanOp});oI.addEventListener('input',e=>scanOp=e.target.value);
+    const dlI=el('input',{class:'inp',type:'number',value:scanDil,min:'0.01',step:'0.01'});dlI.addEventListener('input',e=>scanDil=e.target.value);
+    body.appendChild(el('div',{class:'frow'},
+      el('div',{class:'field'},el('label',{class:'lbl'},'Date'),dI),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Operator'),oI),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Dilution factor'),dlI)
+    ));
+
+    const stSel=el('select',{class:'inp'});
+    [['stability','Stability / Incoming QC'],['pre-conjugation','Pre-conjugation'],['post-conjugation','Post-conjugation']].forEach(([v,t])=>{
+      const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(scanType===v)opt.selected=true;stSel.appendChild(opt);
+    });
+    stSel.addEventListener('change',e=>scanType=e.target.value);
+
+    const mmSel2=el('select',{class:'inp'});
+    [['pedestal','Pedestal (micro-volume)'],['cuvette','Cuvette']].forEach(([v,t])=>{
+      const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(scanMeasureMode===v)opt.selected=true;mmSel2.appendChild(opt);
+    });
+    mmSel2.addEventListener('change',e=>{
+      scanMeasureMode=e.target.value;
+      volSel2.innerHTML='';
+      const vo=scanMeasureMode==='pedestal'?[['1','1 µL'],['2','2 µL'],['custom','Custom']]:
+                                             [['70','70 µL'],['700','700 µL'],['custom','Custom']];
+      vo.forEach(([v,t])=>{const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(scanVolume===v)opt.selected=true;volSel2.appendChild(opt);});
+    });
+
+    const vo2=scanMeasureMode==='pedestal'?[['1','1 µL'],['2','2 µL'],['custom','Custom']]:
+                                            [['70','70 µL'],['700','700 µL'],['custom','Custom']];
+    const volSel2=el('select',{class:'inp'});
+    vo2.forEach(([v,t])=>{const opt=document.createElement('option');opt.value=v;opt.textContent=t;if(scanVolume===v)opt.selected=true;volSel2.appendChild(opt);});
+    volSel2.addEventListener('change',e=>scanVolume=e.target.value);
+
+    const diluentI2=el('input',{class:'inp',type:'text',placeholder:'e.g., DI water, PBS',value:scanDiluent});
+    diluentI2.addEventListener('input',e=>scanDiluent=e.target.value);
+
+    body.appendChild(el('div',{class:'frow'},
+      el('div',{class:'field'},el('label',{class:'lbl'},'Scan type'),stSel),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Measurement mode'),mmSel2),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Sample volume'),volSel2),
+      el('div',{class:'field'},el('label',{class:'lbl'},'Diluent'),diluentI2)
+    ));
+
+    const nI=el('input',{class:'inp',placeholder:'e.g., Manual entry, post-conjugation check',value:scanNotes});
+    nI.addEventListener('input',e=>scanNotes=e.target.value);
+    body.appendChild(el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),nI));
+
+    foot.appendChild(el('button',{class:'btn btn-ghost',onClick:()=>setState({modal:null})},'Cancel'));
+    foot.appendChild(el('button',{
+      class:'btn btn-primary',
+      style:{opacity:parsedData?'1':'0.38',pointerEvents:parsedData?'auto':'none'},
+      onClick:()=>{
+        if(!parsedData)return;
+        const df=Number(scanDil)||1;
+        const anM=Analytics.analyze(parsedData,lot.size,lot.od);
+        const corr=parsedData.map(p=>({wl:p.wl,ab:p.ab*df}));
+        const anC=Analytics.analyze(corr,lot.size,lot.od);
+        DB.addScan(lot.id,{id:uid(),date:scanDate,op:scanOp,dil:df,notes:scanNotes,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()});
+        setState({modal:null});
+      }
+    },'Save Scan'));
+  }
+
+  rebuild();
+
+  const modal=el('div',{class:'modal',onClick:e=>e.stopPropagation()},
+    el('div',{class:'modal-hdr'},
+      el('div',{},el('div',{class:'modal-title'},'Paste Raw Scan Data'),el('div',{class:'modal-sub'},lot.lotNumber+' · CoA OD: '+lot.od)),
+      el('button',{class:'modal-close',onClick:()=>setState({modal:null})},'×')
+    ),body,foot
+  );
+  return el('div',{class:'overlay',onClick:()=>setState({modal:null})},modal);
+}
+
+// ============================================================================
+// SCAN EDIT MODAL
+// ============================================================================
+function buildEditScanModal(){
+  const {lid,sid}=S.editScan||{};
+  const lot=DB.getLots().find(l=>l.id===lid);
+  const scan=lot?DB.getScans(lid).find(s=>s.id===sid):null;
+  if(!lot||!scan)return el('div',{});
+  const f={
+    date:scan.date||'',op:scan.op||'',dil:String(scan.dil||1),
+    notes:scan.notes||'',scanType:scan.scanType||'stability',
+    diluent:scan.diluent||'',measureMode:scan.measureMode||'pedestal',
+    sampleVolume:scan.sampleVolume||'2'
+  };
+  // Conjugate fields for post-conjugation scans
+  const cf={
+    abCatalog:(scan.conj&&scan.conj.abCatalog)||'',
+    abLot:(scan.conj&&scan.conj.abLot)||'',
+    abSupplier:(scan.conj&&scan.conj.abSupplier)||'',
+    conjType:(scan.conj&&scan.conj.conjType)||'passive',
+    conc:(scan.conj&&scan.conj.conc)||'',
+    concUnit:(scan.conj&&scan.conj.concUnit)||'µg/mL'
+  };
+  const body=el('div',{class:'modal-body'});
+  function field(lbl,key,type,opts){
+    type=type||'text';opts=opts||{};
+    let inp;
+    if(opts.select){
+      inp=el('select',{class:'inp'});
+      opts.select.forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;if(f[key]===v)o.selected=true;inp.appendChild(o);});
+      inp.addEventListener('change',e=>f[key]=e.target.value);
+    } else {
+      inp=el('input',{class:'inp',type,value:f[key],placeholder:opts.ph||''});
+      inp.addEventListener('input',e=>f[key]=e.target.value);
+    }
+    return el('div',{class:'field'},el('label',{class:'lbl'},lbl),inp);
+  }
+  function cfield(lbl,key,type,opts){
+    type=type||'text';opts=opts||{};
+    let inp;
+    if(opts.select){
+      inp=el('select',{class:'inp'});
+      opts.select.forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;if(cf[key]===v)o.selected=true;inp.appendChild(o);});
+      inp.addEventListener('change',e=>cf[key]=e.target.value);
+    } else {
+      inp=el('input',{class:'inp',type,value:cf[key],placeholder:opts.ph||''});
+      inp.addEventListener('input',e=>cf[key]=e.target.value);
+    }
+    return el('div',{class:'field'},el('label',{class:'lbl'},lbl),inp);
+  }
+  body.appendChild(el('div',{class:'frow'},
+    field('Date','date','date'),
+    field('Operator','op','text',{ph:'Initials'}),
+    field('Dilution factor','dil','number')
+  ));
+  body.appendChild(el('div',{class:'frow'},
+    field('Scan type','scanType','',{select:[['stability','Stability / Incoming QC'],['pre-conjugation','Pre-conjugation'],['post-conjugation','Post-conjugation']]}),
+    field('Measurement mode','measureMode','',{select:[['pedestal','Pedestal (micro-volume)'],['cuvette','Cuvette']]}),
+    field('Sample volume','sampleVolume','',{select:[['1','1 µL'],['2','2 µL'],['70','70 µL'],['700','700 µL'],['custom','Custom']]})
+  ));
+  body.appendChild(el('div',{class:'frow'},
+    field('Diluent','diluent','text',{ph:'e.g., DI water, PBS'})
+  ));
+  // If post-conjugation, show antibody fields
+  if(f.scanType==='post-conjugation'||(scan.scanType==='post-conjugation')){
+    const conjBox=el('div',{class:'conj-box'});
+    conjBox.appendChild(el('div',{class:'conj-box-hdr'},
+      el('span',{class:'conj-box-icon'},'🔗'),
+      el('div',{},
+        el('div',{class:'conj-box-title'},'Conjugate Information'),
+        el('div',{class:'conj-box-sub'},'Antibody details for this post-conjugation scan')
+      )
+    ));
+    conjBox.appendChild(el('div',{class:'frow'},
+      cfield('Antibody Catalog #','abCatalog','text',{ph:'e.g., ab12345'}),
+      cfield('Antibody Lot #','abLot','text',{ph:'e.g., GR3241801-1'}),
+      cfield('Antibody Supplier','abSupplier','text',{ph:'e.g., Abcam'})
+    ));
+    conjBox.appendChild(el('div',{class:'frow'},
+      cfield('Conjugation Type','conjType','',{select:[['passive','Passive (physisorption)'],['covalent-edc','Covalent — EDC/NHS'],['covalent-nhs','Covalent — NHS Ester'],['covalent-other','Covalent — Other'],['streptavidin','Streptavidin-Biotin'],['neutravidin','NeutrAvidin-Biotin'],['protein-a','Protein A/G Oriented'],['click','Click Chemistry (SPAAC/CuAAC)'],['maleimide','Thiol-Maleimide'],['peg','PEGylated Conjugate'],['other','Other']]}),
+      cfield('Final Conc.','conc','text',{ph:'e.g., 200'}),
+      cfield('Unit','concUnit','',{select:[['µg/mL','µg/mL'],['mg/mL','mg/mL'],['nM','nM'],['µM','µM'],['OD','OD'],['particles/mL','particles/mL'],['other','other']]})
+    ));
+    body.appendChild(conjBox);
+  }
+  const ta=el('textarea',{class:'inp',placeholder:'Notes…',style:{minHeight:'70px'}});
+  ta.value=f.notes;ta.addEventListener('input',e=>f.notes=e.target.value);
+  body.appendChild(el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),ta));
+  const foot=el('div',{class:'modal-foot'},
+    el('button',{class:'btn btn-ghost',onClick:()=>setState({modal:null,editScan:null})},'Cancel'),
+    el('button',{class:'btn btn-primary',onClick:()=>{
+      const update={date:f.date,op:f.op,dil:Number(f.dil)||1,notes:f.notes,scanType:f.scanType,diluent:f.diluent,measureMode:f.measureMode,sampleVolume:f.sampleVolume};
+      // If post-conj, update conjugate fields too
+      if(scan.conj){
+        update.conj=Object.assign({},scan.conj,{abCatalog:cf.abCatalog,abLot:cf.abLot,abSupplier:cf.abSupplier,conjType:cf.conjType,conc:cf.conc,concUnit:cf.concUnit});
+      }
+      DB.updateScan(lid,sid,update);
+      setState({modal:null,editScan:null});
+    }},'Save Changes')
+  );
+  const modal=el('div',{class:'modal',onClick:e=>e.stopPropagation()},
+    el('div',{class:'modal-hdr'},
+      el('div',{},el('div',{class:'modal-title'},'Edit Scan'),el('div',{class:'modal-sub'},lot.lotNumber+' · '+fmtDate(scan.date))),
+      el('button',{class:'modal-close',onClick:()=>setState({modal:null,editScan:null})},'×')
+    ),body,foot
+  );
+  return el('div',{class:'overlay',onClick:()=>setState({modal:null,editScan:null})},modal);
+}
+
+// ============================================================================
+// BOOT
+// ============================================================================
+seedDemo();
+render();
+</script>
+</body>
+</html>
