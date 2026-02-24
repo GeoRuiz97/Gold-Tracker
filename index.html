@@ -2028,12 +2028,32 @@ function buildSpectrumChart(scans,title,useLotLabel){
       s.appendChild(svgEl('line',{x1:x,y1:PT,x2:x,y2:PT+cH,stroke:SCAN_COLORS[i%SCAN_COLORS.length],strokeWidth:'0.8',strokeDasharray:'3,5',opacity:'0.45'}));
     });
 
-    // Data lines — thick, crisp (OriginLab default 1.5–2pt lines)
+    // Data lines — downsample to ~1 point per pixel column to avoid fat-band effect
+    // on high-density NanoDrop data (0.5 nm steps = 1160 pts over ~850px)
+    function downsample(pts, maxPts) {
+      if (pts.length <= maxPts) return pts;
+      const out = [];
+      const step = pts.length / maxPts;
+      for (let i = 0; i < maxPts; i++) {
+        const lo = Math.floor(i * step);
+        const hi = Math.min(Math.floor((i + 1) * step), pts.length) - 1;
+        // Keep the min and max Y in each bucket to preserve peak shape
+        let minPt = pts[lo], maxPt = pts[lo];
+        for (let j = lo + 1; j <= hi; j++) {
+          if (pts[j][1] < minPt[1]) minPt = pts[j];
+          if (pts[j][1] > maxPt[1]) maxPt = pts[j];
+        }
+        if (minPt[0] <= maxPt[0]) { out.push(minPt); if (minPt !== maxPt) out.push(maxPt); }
+        else { out.push(maxPt); if (minPt !== maxPt) out.push(minPt); }
+      }
+      return out;
+    }
     scans.forEach((sc,i)=>{
       if(!vis[i])return;
-      const pts=getRaw(sc).filter(p=>p.wl>=wlMin&&p.wl<=wlMax).map(p=>[xP(p.wl),yP(p.ab)]);
-      if(!pts.length)return;
-      s.appendChild(svgEl('path',{d:makePath(pts),fill:'none',stroke:SCAN_COLORS[i%SCAN_COLORS.length],strokeWidth:'2',strokeLinejoin:'round','stroke-linecap':'round'}));
+      const raw=getRaw(sc).filter(p=>p.wl>=wlMin&&p.wl<=wlMax).map(p=>[xP(p.wl),yP(p.ab)]);
+      if(!raw.length)return;
+      const pts=downsample(raw, cW); // at most 1 pt per pixel column
+      s.appendChild(svgEl('path',{d:makePath(pts),fill:'none',stroke:SCAN_COLORS[i%SCAN_COLORS.length],strokeWidth:'1.5',strokeLinejoin:'round','stroke-linecap':'round'}));
     });
 
     // ── Axis frame — solid box (OriginLab) ──────────────────────────────
