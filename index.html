@@ -6,6 +6,166 @@
 <title>AuTrack · Nanoparticle QC</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="module">
+// ============================================================================
+// FIREBASE / FIRESTORE INIT
+// ============================================================================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, collection, doc,
+  getDocs, getDoc, setDoc, updateDoc, deleteDoc, addDoc,
+  onSnapshot, query, orderBy, writeBatch, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC4H2n4yNqaYOT2FeypokrSuAfJCFQFOkM",
+  authDomain: "gold-tracker-346a8.firebaseapp.com",
+  projectId: "gold-tracker-346a8",
+  storageBucket: "gold-tracker-346a8.firebasestorage.app",
+  messagingSenderId: "262736752631",
+  appId: "1:262736752631:web:b920c1103919c0942008f2"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+
+// Expose to global scope so the rest of the app (non-module script) can use it
+window._db = db;
+window._fsReady = false;
+
+// Firestore helpers exposed globally
+window._FS = {
+  lotsCol: () => collection(db, 'lots'),
+  scansCol: (lotId) => collection(db, 'lots', lotId, 'scans'),
+  lotDoc: (lotId) => doc(db, 'lots', lotId),
+  scanDoc: (lotId, scanId) => doc(db, 'lots', lotId, 'scans', scanId),
+  cfgDoc: () => doc(db, 'config', 'settings'),
+
+  async getLots() {
+    const snap = await getDocs(this.lotsCol());
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+  async getScans(lotId) {
+    const snap = await getDocs(this.scansCol(lotId));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+  async addLot(lot) {
+    const { id, ...data } = lot;
+    await setDoc(doc(db, 'lots', id), data);
+  },
+  async updateLot(lotId, patch) {
+    await updateDoc(this.lotDoc(lotId), patch);
+  },
+  async deleteLot(lotId) {
+    // Delete all scans first
+    const scans = await getDocs(this.scansCol(lotId));
+    const batch = writeBatch(db);
+    scans.docs.forEach(s => batch.delete(s.ref));
+    batch.delete(this.lotDoc(lotId));
+    await batch.commit();
+  },
+  async addScan(lotId, scan) {
+    const { id, ...data } = scan;
+    await setDoc(doc(db, 'lots', lotId, 'scans', id), data);
+  },
+  async updateScan(lotId, scanId, patch) {
+    await updateDoc(this.scanDoc(lotId, scanId), patch);
+  },
+  async deleteScan(lotId, scanId) {
+    await deleteDoc(this.scanDoc(lotId, scanId));
+  },
+  async getCfg() {
+    const snap = await getDoc(this.cfgDoc());
+    return snap.exists() ? snap.data() : {};
+  },
+  async setCfg(patch) {
+    await setDoc(this.cfgDoc(), patch, { merge: true });
+  }
+};
+
+// ── In-memory cache (kept in sync by onSnapshot listeners) ──
+window._cache = { lots: [], scansMap: {}, cfg: {} };
+
+// ── Real-time listener on all lots ──
+onSnapshot(collection(db, 'lots'), async (lotsSnap) => {
+  const lots = lotsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  window._cache.lots = lots;
+  // Attach per-lot scan listeners for any new lots
+  lots.forEach(lot => {
+    if (!window._scanUnsubs) window._scanUnsubs = {};
+    if (!window._scanUnsubs[lot.id]) {
+      window._scanUnsubs[lot.id] = onSnapshot(
+        collection(db, 'lots', lot.id, 'scans'),
+        (scansSnap) => {
+          window._cache.scansMap[lot.id] = scansSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          if (window._fsReady) window.render();
+        }
+      );
+    }
+  });
+  // Clean up listeners for deleted lots
+  if (window._scanUnsubs) {
+    Object.keys(window._scanUnsubs).forEach(id => {
+      if (!lots.find(l => l.id === id)) {
+        window._scanUnsubs[id]();
+        delete window._scanUnsubs[id];
+        delete window._cache.scansMap[id];
+      }
+    });
+  }
+  if (window._fsReady) window.render();
+});
+
+// ── Real-time listener on config ──
+onSnapshot(doc(db, 'config', 'settings'), (snap) => {
+  window._cache.cfg = snap.exists() ? snap.data() : {};
+  if (window._fsReady) window.render();
+});
+
+// ── Bootstrap: load initial data, seed if empty, then start the app ──
+async function bootstrap() {
+  // Load initial lots
+  const lotsSnap = await getDocs(collection(db, 'lots'));
+  window._cache.lots = lotsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Load scans for each lot
+  for (const lotDoc of lotsSnap.docs) {
+    const scansSnap = await getDocs(collection(db, 'lots', lotDoc.id, 'scans'));
+    window._cache.scansMap[lotDoc.id] = scansSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  // Load config
+  const cfgSnap = await getDoc(doc(db, 'config', 'settings'));
+  window._cache.cfg = cfgSnap.exists() ? cfgSnap.data() : {};
+
+  // Apply theme before first render
+  if ((window._cache.cfg.theme || 'dark') === 'light') document.body.classList.add('light');
+
+  // Seed demo data if Firestore is empty
+  if (window._cache.lots.length === 0) {
+    await window.seedDemoFirestore();
+    // Reload after seed
+    const ls2 = await getDocs(collection(db, 'lots'));
+    window._cache.lots = ls2.docs.map(d => ({ id: d.id, ...d.data() }));
+    for (const ld of ls2.docs) {
+      const ss = await getDocs(collection(db, 'lots', ld.id, 'scans'));
+      window._cache.scansMap[ld.id] = ss.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+  }
+
+  window._fsReady = true;
+  // Show sync status
+  const syncEl = document.getElementById('sync-status');
+  if (syncEl) { syncEl.textContent = '● Live'; syncEl.style.color = 'var(--green)'; }
+  window.render();
+}
+
+bootstrap().catch(err => {
+  console.error('Firebase bootstrap error:', err);
+  const syncEl = document.getElementById('sync-status');
+  if (syncEl) { syncEl.textContent = '✕ Offline'; syncEl.style.color = 'var(--red)'; }
+});
+</script>
 
 
 
@@ -731,6 +891,15 @@ body.light .conj-box{border-color:rgba(42,127,192,0.3);background:rgba(42,127,19
 </style>
 </head>
 <body>
+<div id="loading-screen" style="position:fixed;inset:0;background:var(--bg,#080C12);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px;">
+  <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;color:#C8A84B;letter-spacing:-0.02em;">Au</div>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#3E4D66;text-transform:uppercase;letter-spacing:0.14em;">Connecting to Firestore…</div>
+  <div style="width:40px;height:2px;background:#1C2333;border-radius:2px;overflow:hidden;position:relative;">
+    <div style="position:absolute;left:-100%;width:100%;height:100%;background:#C8A84B;animation:slide 1.2s ease-in-out infinite;"></div>
+  </div>
+</div>
+<style>@keyframes slide{0%{left:-100%}100%{left:100%}}</style>
+<script>window.render=function(){};</script>
 <div id="app"></div>
 <div id="rpt-root"></div>
 <script>
@@ -867,24 +1036,43 @@ const Analytics={
 };
 
 // ============================================================================
-// STORAGE
+// STORAGE — Firestore-backed, reads from in-memory cache, writes to Firestore
+// Cache is kept live by onSnapshot listeners set up in the module <script> above.
 // ============================================================================
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,9);}
-const LS={
-  get(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch{return fb;}},
-  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
-};
+
 const DB={
-  getLots(){return LS.get('gt_lots',[]);},
-  saveLots(l){LS.set('gt_lots',l);},
-  getScans(id){return LS.get('gt_s_'+id,[]);},
-  saveScans(id,s){LS.set('gt_s_'+id,s);},
-  addLot(l){const a=this.getLots();a.push(l);this.saveLots(a);},
-  updateLot(id,u){const a=this.getLots(),i=a.findIndex(l=>l.id===id);if(i!==-1){a[i]=Object.assign({},a[i],u);this.saveLots(a);}},
-  deleteLot(id){this.saveLots(this.getLots().filter(l=>l.id!==id));try{localStorage.removeItem('gt_s_'+id);}catch{}},
-  addScan(id,s){const a=this.getScans(id);a.push(s);this.saveScans(id,a);},
-  updateScan(lid,sid,u){const a=this.getScans(lid);const i=a.findIndex(s=>s.id===sid);if(i!==-1){a[i]=Object.assign({},a[i],u);this.saveScans(lid,a);}},
-  deleteScan(lid,sid){this.saveScans(lid,this.getScans(lid).filter(s=>s.id!==sid));}
+  getLots(){
+    return (window._cache&&window._cache.lots)||[];
+  },
+  getScans(id){
+    return ((window._cache&&window._cache.scansMap)||{})[id]||[];
+  },
+  addLot(l){
+    // Optimistic: push to cache immediately, then persist
+    if(window._cache)window._cache.lots=[...window._cache.lots,l];
+    if(window._FS)window._FS.addLot(l).catch(e=>console.error('addLot',e));
+  },
+  updateLot(id,u){
+    if(window._cache){const i=window._cache.lots.findIndex(l=>l.id===id);if(i!==-1)window._cache.lots[i]=Object.assign({},window._cache.lots[i],u);}
+    if(window._FS)window._FS.updateLot(id,u).catch(e=>console.error('updateLot',e));
+  },
+  deleteLot(id){
+    if(window._cache){window._cache.lots=window._cache.lots.filter(l=>l.id!==id);delete window._cache.scansMap[id];}
+    if(window._FS)window._FS.deleteLot(id).catch(e=>console.error('deleteLot',e));
+  },
+  addScan(lid,s){
+    if(window._cache){if(!window._cache.scansMap[lid])window._cache.scansMap[lid]=[];window._cache.scansMap[lid]=[...window._cache.scansMap[lid],s];}
+    if(window._FS)window._FS.addScan(lid,s).catch(e=>console.error('addScan',e));
+  },
+  updateScan(lid,sid,u){
+    if(window._cache&&window._cache.scansMap[lid]){const i=window._cache.scansMap[lid].findIndex(s=>s.id===sid);if(i!==-1)window._cache.scansMap[lid][i]=Object.assign({},window._cache.scansMap[lid][i],u);}
+    if(window._FS)window._FS.updateScan(lid,sid,u).catch(e=>console.error('updateScan',e));
+  },
+  deleteScan(lid,sid){
+    if(window._cache&&window._cache.scansMap[lid])window._cache.scansMap[lid]=window._cache.scansMap[lid].filter(s=>s.id!==sid);
+    if(window._FS)window._FS.deleteScan(lid,sid).catch(e=>console.error('deleteScan',e));
+  }
 };
 
 // ============================================================================
@@ -956,9 +1144,9 @@ function mkNanoDrop(peakWl, peakAb, fwhm, tailMult, noiseAmp) {
   return raw;
 }
 
-function seedDemo() {
-  if (DB.getLots().length > 0) return;
-
+// seedDemoFirestore: async, called by bootstrap when Firestore is empty
+// Also exposed as window.seedDemoFirestore for the module script
+async function seedDemoFirestore() {
   const l1 = {id:uid(),supplier:'BBI Solutions',lotNumber:'GC40-2024-0891',catalog:'GC40',size:40,od:1.0,
     buffer:'0.01% Citrate buffer, pH 7.0',received:'2024-09-15',expires:'2026-09-15',
     storage:'4\u00b0C, dark',notes:'Standard 40nm lot for LFA conjugation. Passed incoming QC.',created:Date.now()};
@@ -971,74 +1159,79 @@ function seedDemo() {
   const l4 = {id:uid(),supplier:'BBI Solutions',lotNumber:'GC40-2024-1255',catalog:'GC40',size:40,od:1.0,
     buffer:'0.01% Citrate buffer, pH 7.0',received:'2024-11-01',expires:'2026-11-01',
     storage:'4\u00b0C, dark',notes:'Conjugation lot. Pre/post-conjugation scans + dilution series.',created:Date.now()-259200000};
-  DB.addLot(l1); DB.addLot(l2); DB.addLot(l3); DB.addLot(l4);
 
-  // LOT 1 — STABLE (mix of 1×, 5×, 10× to demo dilution correction)
-  [
+  // Write lots to Firestore
+  await Promise.all([l1,l2,l3,l4].map(l => {
+    const {id,...data}=l; return window._FS.addLot(l);
+  }));
+
+  // LOT 1 — STABLE
+  for (const s of [
     {date:'2024-09-16',op:'JK',dil:1, peakWl:529.8,peakAb:1.020,fwhm:98, tailMult:1.00,notes:'Incoming QC'},
     {date:'2024-10-15',op:'JK',dil:5, peakWl:530.0,peakAb:0.204,fwhm:98, tailMult:1.00,notes:'1-month stability, 5× diluted in DI water'},
     {date:'2024-11-15',op:'ML',dil:1, peakWl:530.1,peakAb:1.005,fwhm:98, tailMult:1.00,notes:'2-month stability check'},
     {date:'2024-12-15',op:'ML',dil:10,peakWl:530.2,peakAb:0.101,fwhm:99, tailMult:1.00,notes:'3-month, 10× diluted in PBS'},
     {date:'2025-01-15',op:'JK',dil:1, peakWl:530.3,peakAb:0.998,fwhm:99, tailMult:1.00,notes:'4-month stability check'},
-  ].forEach(s => {
+  ]) {
     const raw = mkNanoDrop(s.peakWl, s.peakAb, s.fwhm, s.tailMult, 0.003);
-    DB.addScan(l1.id, {id:uid(),date:s.date,op:s.op,dil:s.dil,notes:s.notes,
+    await window._FS.addScan(l1.id, {id:uid(),date:s.date,op:s.op,dil:s.dil,notes:s.notes,
       diluent:'DI water',scanType:'stability',raw,
       an:Analytics.analyze(raw,40,1.0),
-      anC:Analytics.analyze(raw.map(p=>{return{wl:p.wl,ab:p.ab*s.dil}})  ,40,1.0),
+      anC:Analytics.analyze(raw.map(p=>({wl:p.wl,ab:p.ab*s.dil})),40,1.0),
       created:new Date(s.date).getTime()});
-  });
+  }
 
-  // LOT 2 — DRIFTING (progressive red-shift + broadening)
-  [
+  // LOT 2 — DRIFTING
+  for (const s of [
     {date:'2024-10-02',op:'ML',peakWl:535.0,peakAb:1.20,fwhm:105,tailMult:1.05,notes:'Incoming QC'},
     {date:'2024-11-02',op:'ML',peakWl:536.5,peakAb:1.17,fwhm:108,tailMult:1.12,notes:'1-month stability'},
     {date:'2024-12-02',op:'JK',peakWl:538.2,peakAb:1.14,fwhm:113,tailMult:1.22,notes:'2-month — drift noted'},
     {date:'2025-01-02',op:'JK',peakWl:539.8,peakAb:1.10,fwhm:118,tailMult:1.35,notes:'3-month — drifting confirmed'},
-  ].forEach(s => {
+  ]) {
     const raw = mkNanoDrop(s.peakWl, s.peakAb, s.fwhm, s.tailMult, 0.004);
-    DB.addScan(l2.id, {id:uid(),date:s.date,op:s.op,dil:1,notes:s.notes,
+    await window._FS.addScan(l2.id, {id:uid(),date:s.date,op:s.op,dil:1,notes:s.notes,
       diluent:'DI water',scanType:'stability',raw,
       an:Analytics.analyze(raw,50,1.2),anC:Analytics.analyze(raw,50,1.2),
       created:new Date(s.date).getTime()});
-  });
+  }
 
-  // LOT 3 — AGGREGATING (severe progressive degradation)
-  [
+  // LOT 3 — AGGREGATING
+  for (const s of [
     {date:'2024-06-02',op:'JK',peakWl:529.5,peakAb:1.01,fwhm:99, tailMult:1.00,notes:'Incoming QC — pass'},
     {date:'2024-07-02',op:'ML',peakWl:531.0,peakAb:0.99,fwhm:102,tailMult:1.08,notes:'1-month — slight broadening'},
     {date:'2024-08-02',op:'JK',peakWl:534.5,peakAb:0.95,fwhm:110,tailMult:1.30,notes:'2-month — drift + tail rise'},
     {date:'2024-09-02',op:'ML',peakWl:539.0,peakAb:0.88,fwhm:122,tailMult:1.65,notes:'3-month — aggregating'},
     {date:'2024-10-02',op:'JK',peakWl:545.0,peakAb:0.78,fwhm:138,tailMult:2.10,notes:'4-month — severe. QUARANTINE.'},
-  ].forEach(s => {
+  ]) {
     const raw = mkNanoDrop(s.peakWl, s.peakAb, s.fwhm, s.tailMult, 0.004);
-    DB.addScan(l3.id, {id:uid(),date:s.date,op:s.op,dil:1,notes:s.notes,
+    await window._FS.addScan(l3.id, {id:uid(),date:s.date,op:s.op,dil:1,notes:s.notes,
       diluent:'DI water',scanType:'stability',raw,
       an:Analytics.analyze(raw,40,1.0),anC:Analytics.analyze(raw,40,1.0),
       created:new Date(s.date).getTime()});
-  });
+  }
 
-  // LOT 4 — PRE/POST-CONJUGATION + dilution demo
-  (function() {
-    const rPre = mkNanoDrop(529.8,1.03,97,1.0,0.003);
-    DB.addScan(l4.id, {id:uid(),date:'2024-11-05',op:'JK',dil:1,
-      notes:'Pre-conjugation baseline',diluent:'DI water',scanType:'pre-conjugation',raw:rPre,
-      an:Analytics.analyze(rPre,40,1.0),anC:Analytics.analyze(rPre,40,1.0),
-      created:new Date('2024-11-05').getTime()});
-    // Post-conj at 5× dilution — antibody coating raises 280nm signal
-    const rPost5 = mkNanoDrop(532.5,0.194,101,1.04,0.003);
-    const rPostCorr = mkNanoDrop(532.5,0.97,101,1.04,0.003); // corrected
-    DB.addScan(l4.id, {id:uid(),date:'2024-11-06',op:'JK',dil:5,
-      notes:'Post-conjugation anti-CRP IgG — 5× diluted in PBS',diluent:'PBS',scanType:'post-conjugation',raw:rPost5,
-      an:Analytics.analyze(rPost5,40,1.0),anC:Analytics.analyze(rPostCorr,40,1.0),
-      created:new Date('2024-11-06').getTime()});
-    const rStab = mkNanoDrop(532.8,0.96,102,1.05,0.003);
-    DB.addScan(l4.id, {id:uid(),date:'2024-12-06',op:'ML',dil:1,
-      notes:'1-month post-conjugation stability',diluent:'PBS',scanType:'stability',raw:rStab,
-      an:Analytics.analyze(rStab,40,1.0),anC:Analytics.analyze(rStab,40,1.0),
-      created:new Date('2024-12-06').getTime()});
-  })();
+  // LOT 4 — PRE/POST-CONJUGATION
+  const rPre = mkNanoDrop(529.8,1.03,97,1.0,0.003);
+  await window._FS.addScan(l4.id, {id:uid(),date:'2024-11-05',op:'JK',dil:1,
+    notes:'Pre-conjugation baseline',diluent:'DI water',scanType:'pre-conjugation',raw:rPre,
+    an:Analytics.analyze(rPre,40,1.0),anC:Analytics.analyze(rPre,40,1.0),
+    created:new Date('2024-11-05').getTime()});
+  const rPost5 = mkNanoDrop(532.5,0.194,101,1.04,0.003);
+  const rPostCorr = mkNanoDrop(532.5,0.97,101,1.04,0.003);
+  await window._FS.addScan(l4.id, {id:uid(),date:'2024-11-06',op:'JK',dil:5,
+    notes:'Post-conjugation anti-CRP IgG — 5× diluted in PBS',diluent:'PBS',scanType:'post-conjugation',raw:rPost5,
+    an:Analytics.analyze(rPost5,40,1.0),anC:Analytics.analyze(rPostCorr,40,1.0),
+    created:new Date('2024-11-06').getTime()});
+  const rStab = mkNanoDrop(532.8,0.96,102,1.05,0.003);
+  await window._FS.addScan(l4.id, {id:uid(),date:'2024-12-06',op:'ML',dil:1,
+    notes:'1-month post-conjugation stability',diluent:'PBS',scanType:'stability',raw:rStab,
+    an:Analytics.analyze(rStab,40,1.0),anC:Analytics.analyze(rStab,40,1.0),
+    created:new Date('2024-12-06').getTime()});
 }
+window.seedDemoFirestore = seedDemoFirestore;
+
+// Legacy no-op (boot is now handled by Firebase module)
+function seedDemo() {}
 
 // ============================================================================
 // SETTINGS
@@ -1056,15 +1249,15 @@ const SETTINGS_DEFAULTS={
   theme:'dark',       // 'dark' | 'light'
 };
 const CFG={
-  get(){return Object.assign({},SETTINGS_DEFAULTS,LS.get('gt_cfg',{}));},
-  set(patch){LS.set('gt_cfg',Object.assign(CFG.get(),patch));}
+  get(){return Object.assign({},SETTINGS_DEFAULTS,(window._cache&&window._cache.cfg)||{});},
+  set(patch){
+    const updated=Object.assign(CFG.get(),patch);
+    if(window._cache)window._cache.cfg=updated;
+    if(window._FS)window._FS.setCfg(updated).catch(e=>console.error('setCfg',e));
+  }
 };
 
-// Apply theme on load
-(function applyTheme(){
-  const cfg=CFG.get();
-  if(cfg.theme==='light') document.body.classList.add('light');
-})();
+// Theme is applied by the Firebase bootstrap function before first render
 
 // ============================================================================
 // DOM HELPERS
@@ -1151,6 +1344,12 @@ function buildAbsToggle(){
 }
 
 function render(){
+  // Don't render until Firestore bootstrap completes
+  if(!window._fsReady) return;
+  window.render=render; // keep global ref updated
+  // Hide loading screen on first render
+  const ls=document.getElementById('loading-screen');
+  if(ls)ls.style.display='none';
   const activeEl=document.activeElement;
   const focusId=activeEl&&activeEl.dataset&&activeEl.dataset.focusid?activeEl.dataset.focusid:null;
   const focusCls=activeEl&&activeEl.classList.contains('search')?'search':null;
@@ -1210,6 +1409,7 @@ function buildHdr(){
       )
     ),
     el('div',{class:'hdr-right'},
+      el('span',{id:'sync-status',style:{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text-3)',letterSpacing:'0.05em'}},'Connecting…'),
       el('button',{class:'theme-btn',title:isLight?'Switch to dark mode':'Switch to light mode',onClick:toggleTheme},isLight?'☀':'🌙'),
       el('button',{class:'btn-reset',onClick:resetDemo},'Reset Demo')
     )
@@ -1218,10 +1418,24 @@ function buildHdr(){
 function mkNb(key,label){
   return el('button',{class:'nb'+(S.view===key?' on':''),onClick:()=>setState({view:key})},label);
 }
-function resetDemo(){
+async function resetDemo(){
   if(!confirm('Reset all data and restore demo lots?'))return;
-  try{Object.keys(localStorage).filter(k=>k.startsWith('gt_')).forEach(k=>localStorage.removeItem(k));}catch{}
-  seedDemo();setState({view:'dashboard',lot:null,modal:null});
+  // Delete all lots (and their subcollection scans) in Firestore
+  const lots=DB.getLots();
+  for(const lot of lots){
+    await window._FS.deleteLot(lot.id);
+  }
+  // Also delete config
+  try{await window._FS.setCfg({});}catch{}
+  // Clear cache
+  window._cache.lots=[];window._cache.scansMap={};window._cache.cfg={};
+  // Seed fresh
+  await seedDemoFirestore();
+  // Reload cache from Firestore
+  const ls=await window._FS.getLots();
+  window._cache.lots=ls;
+  for(const lot of ls){window._cache.scansMap[lot.id]=await window._FS.getScans(lot.id);}
+  setState({view:'dashboard',lot:null,modal:null});
 }
 
 // ============================================================================
@@ -3098,7 +3312,7 @@ function buildSettings(){
         el('div',{style:{display:'flex',gap:'28px',flexWrap:'wrap'}},
           el('div',{},el('div',{class:'coa-k'},'App'),el('div',{class:'coa-v'},'AuTrack')),
           el('div',{},el('div',{class:'coa-k'},'Version'),el('div',{class:'coa-v'},'3.0 — nanoComposix analytics')),
-          el('div',{},el('div',{class:'coa-k'},'Storage'),el('div',{class:'coa-v'},'localStorage')),
+          el('div',{},el('div',{class:'coa-k'},'Storage'),el('div',{class:'coa-v'},'Cloud Firestore (Real-time)')),
           el('div',{},el('div',{class:'coa-k'},'Lots stored'),el('div',{class:'coa-v'},DB.getLots().length)),
         )
       )
@@ -3351,8 +3565,8 @@ function buildEditScanModal(){
 // ============================================================================
 // BOOT
 // ============================================================================
-seedDemo();
-render();
+// App is booted by the Firebase module bootstrap() above.
+// render() is called by bootstrap after Firestore data is loaded.
 </script>
 </body>
 </html>
