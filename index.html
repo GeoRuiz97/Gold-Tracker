@@ -1078,31 +1078,59 @@ const DB={
 // ============================================================================
 // FILE PARSER — NanoDrop TSV and generic CSV/TSV
 // ============================================================================
+// FILE PARSER — NanoDrop TSV (single or multi-sample) and generic CSV/TSV
+// Returns { samples: [{name, date, data}], data (first sample), meta }
 function parseFile(text){
   const lines=text.split(/\r?\n/);
-  const meta={sampleName:null,measureDate:null};
-  var first3=lines.slice(0,3).map(function(l){return l.trim();});
-  if(first3[0]&&!first3[0].startsWith('//')&&isNaN(parseFloat(first3[0]))&&!/\d+\/\d+\/\d+/.test(first3[0])){
-    meta.sampleName=first3[0];
+
+  // ── Detect multi-sample NanoDrop files ──────────────────────────────────
+  // These have repeating blocks: "Sample N" / date / header / //comments / data
+  const sampleStarts=[];
+  lines.forEach((l,i)=>{
+    if(/^Sample\s+\d+/i.test(l.trim())) sampleStarts.push(i);
+  });
+
+  function parseBlock(blockLines){
+    const meta={sampleName:null,measureDate:null};
+    const first3=blockLines.slice(0,4).map(l=>l.trim());
+    if(first3[0]&&!first3[0].startsWith('//')&&isNaN(parseFloat(first3[0]))){
+      meta.sampleName=first3[0];
+    }
+    for(const l of first3){
+      const m=l.match(/(\d+)\/(\d+)\/(\d{4})/);
+      if(m){meta.measureDate=m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');break;}
+    }
+    const data=[];
+    for(const raw of blockLines){
+      const t=raw.trim();
+      if(!t)continue;
+      if(t[0]==='/'&&t[1]==='/')continue;
+      if(t[0]==='#')continue;
+      const p=t.split(/\t|,|;/);
+      if(p.length<2)continue;
+      const wl=parseFloat(p[0]),ab=parseFloat(p[1]);
+      if(isNaN(wl)||isNaN(ab))continue;
+      if(wl>=190&&wl<=900)data.push({wl,ab});
+    }
+    data.sort((a,b)=>a.wl-b.wl);
+    return{data,meta};
   }
-  if(first3[1]&&/\d+\/\d+\/\d{4}/.test(first3[1])){
-    var m=first3[1].match(/(\d+)\/(\d+)\/(\d{4})/);
-    if(m){meta.measureDate=m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');}
+
+  if(sampleStarts.length>1){
+    // Multi-sample file — split into blocks
+    const samples=sampleStarts.map((start,i)=>{
+      const end=sampleStarts[i+1]??lines.length;
+      const block=lines.slice(start,end);
+      const{data,meta}=parseBlock(block);
+      return{name:meta.sampleName||('Sample '+(i+1)),date:meta.measureDate,data};
+    }).filter(s=>s.data.length>0);
+    const first=samples[0]||{data:[],meta:{}};
+    return{data:first.data,meta:{sampleName:first.name,measureDate:first.date},samples};
   }
-  var data=[];
-  for(var i=0;i<lines.length;i++){
-    var t=lines[i].trim();
-    if(!t)continue;
-    if(t[0]==='/'&&t[1]==='/')continue;
-    if(t[0]==='#')continue;
-    var p=t.split(/\t|,|;/);
-    if(p.length<2)continue;
-    var wl=parseFloat(p[0]),ab=parseFloat(p[1]);
-    if(isNaN(wl)||isNaN(ab))continue;
-    if(wl>=190&&wl<=900)data.push({wl:wl,ab:ab});
-  }
-  data.sort(function(a,b){return a.wl-b.wl;});
-  return{data:data,meta:meta};
+
+  // Single-sample fallback
+  const{data,meta}=parseBlock(lines);
+  return{data,meta,samples:[{name:meta.sampleName||'Sample 1',date:meta.measureDate,data}]};
 }
 
 // ============================================================================
@@ -1246,6 +1274,21 @@ const SETTINGS_DEFAULTS={
   tailRiseWarn:0.005, // Long-wavelength tail rise (AU) before "Drifting"
   tailRiseDanger:0.02,// Long-wavelength tail rise (AU) before "Aggregating"
   expiryWarnDays:90,  // days before expiry to show warning
+  // ── Replicate CV thresholds (batch CV calculator) ─────────────────────
+  // Basis: NanoDrop One User Guide (269-309102 Rev E, 2021).
+  // The manual states typical reproducibility of ±2% CV for absorbance
+  // measurements at concentrations where instrument noise is not limiting.
+  // Wavelength accuracy is spec'd at ±1nm; for a 530nm peak that is ±0.19%CV.
+  // FWHM and tail CVs have no direct instrument spec — set conservatively
+  // and tune to your own replicate data over time via Settings.
+  cvLambdaWarn:0.2,   // %CV λmax warn   (±1nm on 530nm ≈ 0.19% — NanoDrop wavelength accuracy)
+  cvLambdaDanger:0.5, // %CV λmax danger
+  cvOdWarn:2,         // %CV OD warn     (NanoDrop spec: ±2% typical reproducibility)
+  cvOdDanger:5,       // %CV OD danger   (>5% suggests pipetting or sample prep issue)
+  cvFwhmWarn:3,       // %CV FWHM warn   (FWHM derived from peak shape; more variable)
+  cvFwhmDanger:7,     // %CV FWHM danger
+  cvTailWarn:20,      // %CV tail warn   (near-zero values have inherently high CV)
+  cvTailDanger:50,    // %CV tail danger
   theme:'dark',       // 'dark' | 'light'
 };
 const CFG={
@@ -1962,11 +2005,17 @@ function buildSpectrumChart(scans,title,useLotLabel){
 
   let dataMin=Infinity,dataMax=-Infinity;
   scans.forEach(s=>getRaw(s).forEach(p=>{if(p.wl<dataMin)dataMin=p.wl;if(p.wl>dataMax)dataMax=p.wl;}));
-  const wlMin=dataMin<300?270:400;
+  // Always start at 270nm minimum — data below this (190–270nm) has extreme
+  // negative/positive UV values that completely blow up the Y axis scale,
+  // making the SPR peak region look like noise.
+  const wlMin=270;
   const wlMax=dataMax>700?Math.min(dataMax,900):750;
   let mnA=Infinity,mxA=-Infinity;
   scans.forEach(s=>getRaw(s).filter(p=>p.wl>=wlMin&&p.wl<=wlMax).forEach(p=>{if(p.ab<mnA)mnA=p.ab;if(p.ab>mxA)mxA=p.ab;}));
   if(mnA===Infinity){mnA=0;mxA=1;}
+  // Clamp Y min to 0 — negative absorbance values are instrument artefacts
+  // that stretch the axis and make real signal look compressed/noisy
+  mnA=Math.max(0,mnA);
   const abR=niceRange(mnA*0.95,mxA*1.05);
 
   // Cap Y ticks to max 6 for UV-Vis
@@ -2028,31 +2077,40 @@ function buildSpectrumChart(scans,title,useLotLabel){
       s.appendChild(svgEl('line',{x1:x,y1:PT,x2:x,y2:PT+cH,stroke:SCAN_COLORS[i%SCAN_COLORS.length],strokeWidth:'0.8',strokeDasharray:'3,5',opacity:'0.45'}));
     });
 
-    // Data lines — downsample to ~1 point per pixel column to avoid fat-band effect
-    // on high-density NanoDrop data (0.5 nm steps = 1160 pts over ~850px)
-    function downsample(pts, maxPts) {
-      if (pts.length <= maxPts) return pts;
+    // This NanoDrop exports at 0.1 nm steps (190–850nm = ~6600 pts).
+    // The tail region (600–850nm) has real ±0.05 AU instrument noise at near-zero
+    // absorbance — this is what creates the thick hairy band.
+    // Fix: apply a moving-average smooth, then decimate to 1pt per screen pixel.
+    function smoothAndDecimate(rawPts, smoothNm, maxPts) {
+      if (!rawPts.length) return [];
+      // Estimate step size
+      const step = rawPts.length > 1
+        ? (rawPts[rawPts.length-1].wl - rawPts[0].wl) / (rawPts.length - 1)
+        : 0.1;
+      const half = Math.max(1, Math.round((smoothNm / 2) / step));
+      // Moving average smooth
+      const smoothed = rawPts.map((p, i) => {
+        const lo = Math.max(0, i - half);
+        const hi = Math.min(rawPts.length - 1, i + half);
+        let sum = 0;
+        for (let j = lo; j <= hi; j++) sum += rawPts[j].ab;
+        return { wl: p.wl, ab: sum / (hi - lo + 1) };
+      });
+      // Decimate: keep at most maxPts evenly spaced points
+      if (smoothed.length <= maxPts) return smoothed;
       const out = [];
-      const step = pts.length / maxPts;
+      const stride = smoothed.length / maxPts;
       for (let i = 0; i < maxPts; i++) {
-        const lo = Math.floor(i * step);
-        const hi = Math.min(Math.floor((i + 1) * step), pts.length) - 1;
-        // Keep the min and max Y in each bucket to preserve peak shape
-        let minPt = pts[lo], maxPt = pts[lo];
-        for (let j = lo + 1; j <= hi; j++) {
-          if (pts[j][1] < minPt[1]) minPt = pts[j];
-          if (pts[j][1] > maxPt[1]) maxPt = pts[j];
-        }
-        if (minPt[0] <= maxPt[0]) { out.push(minPt); if (minPt !== maxPt) out.push(maxPt); }
-        else { out.push(maxPt); if (minPt !== maxPt) out.push(minPt); }
+        out.push(smoothed[Math.round(i * stride)]);
       }
       return out;
     }
     scans.forEach((sc,i)=>{
       if(!vis[i])return;
-      const raw=getRaw(sc).filter(p=>p.wl>=wlMin&&p.wl<=wlMax).map(p=>[xP(p.wl),yP(p.ab)]);
+      const raw=getRaw(sc).filter(p=>p.wl>=wlMin&&p.wl<=wlMax);
       if(!raw.length)return;
-      const pts=downsample(raw, cW); // at most 1 pt per pixel column
+      // 5 nm smooth window handles 0.1 nm step noise; decimate to chart pixel width
+      const pts = smoothAndDecimate(raw, 5, cW).map(p=>[xP(p.wl),yP(p.ab)]);
       s.appendChild(svgEl('path',{d:makePath(pts),fill:'none',stroke:SCAN_COLORS[i%SCAN_COLORS.length],strokeWidth:'1.5',strokeLinejoin:'round','stroke-linecap':'round'}));
     });
 
@@ -2184,7 +2242,12 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
     return ticks;
   }
   const yTicks=niceTicks(padded_lo,padded_hi,5);
-  const yMin=yTicks[0], yMax=yTicks[yTicks.length-1];
+  // Guarantee data points are never flush with the top or bottom plot edge.
+  // If niceTicks lands yMax exactly on rawMax or yMin on rawMin, add headroom.
+  let yMin=yTicks[0], yMax=yTicks[yTicks.length-1];
+  const tickStep=yTicks.length>1?yTicks[1]-yTicks[0]:yMax*0.1||0.01;
+  if(yMax<=rawMax) yMax=Math.round((yMax+tickStep)*1e9)/1e9;
+  if(yMin>=rawMin) yMin=Math.round((yMin-tickStep)*1e9)/1e9;
 
   // ── Coordinate mappers ───────────────────────────────────────────────────
   const xP=i=>PL+(data.length>1?i/(data.length-1):0.5)*cW;
@@ -2216,9 +2279,9 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
   gr.appendChild(svgEl('stop',{offset:'100%',stopColor:color,stopOpacity:'0.00'}));
   defs.appendChild(gr);
 
-  // Clip path
+  // Clip path — expand by 5px (circle radius + stroke) so edge dots aren't hard-cut
   const cp=svgEl('clipPath',{id:clipId});
-  cp.appendChild(svgEl('rect',{x:PL,y:PT,width:cW,height:cH}));
+  cp.appendChild(svgEl('rect',{x:PL-5,y:PT-5,width:cW+10,height:cH+10}));
   defs.appendChild(cp);
   svg.appendChild(defs);
 
@@ -2273,11 +2336,13 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
     strokeWidth:'2',strokeLinejoin:'round','stroke-linecap':'round'}));
   svg.appendChild(dataGroup);
 
-  // ── Data points ──────────────────────────────────────────────────────────
+  // ── Data points — inside clip so they never escape the plot area ─────────
+  const ptGroup=svgEl('g',{'clip-path':`url(#${clipId})`});
   pts.forEach(p=>{
-    svg.appendChild(svgEl('circle',{cx:p[0].toFixed(2),cy:p[1].toFixed(2),r:'3.5',
+    ptGroup.appendChild(svgEl('circle',{cx:p[0].toFixed(2),cy:p[1].toFixed(2),r:'3.5',
       fill:color,stroke:isLight?'#fff':'#0a0f18',strokeWidth:'1.8'}));
   });
+  svg.appendChild(ptGroup);
 
   // ── Axis lines ───────────────────────────────────────────────────────────
   svg.appendChild(svgEl('line',{x1:PL,y1:PT+cH,x2:PL+cW,y2:PT+cH,stroke:axC,strokeWidth:'1.5'}));
@@ -2636,13 +2701,322 @@ function buildScanModal(){
     body.innerHTML='';foot.innerHTML='';
     body.appendChild(fileInput);
 
-    const zone=el('div',{class:'dropzone'+(parsedData?' loaded':''),onClick:()=>fileInput.click()},
-      el('div',{class:'dz-icon'},parsedData?'✓':'↑'),
-      parsedData
-        ?el('div',{},el('div',{class:'dz-title',style:{color:'var(--green)'}},fileName),el('div',{class:'dz-sub'},parsedData.length+' points · '+parsedData[0].wl+'–'+parsedData[parsedData.length-1].wl+' nm'))
+    const isLoaded = parsedData || (parsedSamples && parsedSamples.length > 1);
+    const zone=el('div',{class:'dropzone'+(isLoaded?' loaded':''),onClick:()=>fileInput.click()},
+      el('div',{class:'dz-icon'},isLoaded?'✓':'↑'),
+      isLoaded
+        ?(parsedData
+          ?el('div',{},el('div',{class:'dz-title',style:{color:'var(--green)'}},fileName),el('div',{class:'dz-sub'},parsedData.length+' points · '+parsedData[0].wl+'–'+parsedData[parsedData.length-1].wl+' nm'))
+          :el('div',{},el('div',{class:'dz-title',style:{color:'var(--green)'}},fileName),el('div',{class:'dz-sub'},(parsedSamples?parsedSamples.length+' scans detected — select below':'No data'))))
         :el('div',{},el('div',{class:'dz-title'},'Click to select NanoDrop file'),el('div',{class:'dz-sub'},'TSV · CSV · TXT — Wavelength + Absorbance'))
     );
     body.appendChild(zone);
+
+    // ── Multi-sample picker ──────────────────────────────────────────────
+    if(parsedSamples&&parsedSamples.length>1){
+      // selectedIndices: Set of indices the user has checked
+      if(!body._selIdx) body._selIdx = new Set(parsedSamples.map((_,i)=>i)); // default: all checked
+
+      const selIdx = body._selIdx;
+
+      function rebuildPicker(){
+        const existing = body.querySelector('.sample-picker');
+        if(existing) existing.remove();
+
+        const pickerBox = el('div',{class:'sample-picker',style:{
+          background:'var(--surface)',border:'1px solid var(--gold-lo)',
+          borderRadius:'var(--radius)',padding:'14px 18px',marginBottom:'14px'
+        }});
+
+        // Header row
+        const allChecked = selIdx.size === parsedSamples.length;
+        const noneChecked = selIdx.size === 0;
+        pickerBox.appendChild(el('div',{style:{
+          display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'
+        }},
+          el('div',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--gold)',
+            textTransform:'uppercase',letterSpacing:'0.12em'}},
+            `${parsedSamples.length} scans in file · ${selIdx.size} selected`
+          ),
+          el('div',{style:{display:'flex',gap:'6px'}},
+            el('button',{class:'btn btn-ghost btn-sm',onClick:()=>{
+              parsedSamples.forEach((_,i)=>selIdx.add(i));
+              rebuildPicker();
+            }},allChecked?'✓ All':'Select all'),
+            el('button',{class:'btn btn-ghost btn-sm',onClick:()=>{
+              selIdx.clear();
+              rebuildPicker();
+            }},'None')
+          )
+        ));
+
+        // Sample rows
+        const list = el('div',{style:{display:'flex',flexDirection:'column',gap:'4px',marginBottom:'10px'}});
+        parsedSamples.forEach((s,i)=>{
+          const checked = selIdx.has(i);
+          const an = s.data.length ? Analytics.analyze(s.data,lot.size,lot.od) : null;
+
+          const row = el('div',{style:{
+            display:'flex',alignItems:'center',gap:'10px',
+            padding:'8px 10px',borderRadius:'var(--radius)',cursor:'pointer',
+            background: checked ? 'var(--gold-glow)' : 'var(--bg)',
+            border: '1px solid ' + (checked ? 'var(--gold-lo)' : 'var(--border)'),
+            transition:'all 0.12s'
+          },onClick:()=>{
+            if(selIdx.has(i)) selIdx.delete(i); else selIdx.add(i);
+            rebuildPicker();
+          }});
+
+          // Checkbox visual
+          row.appendChild(el('div',{style:{
+            width:'14px',height:'14px',borderRadius:'3px',flexShrink:'0',
+            border:'1.5px solid '+(checked?'var(--gold)':'var(--border-hi)'),
+            background: checked?'var(--gold)':'transparent',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            fontSize:'9px',color:'#000',fontWeight:'700'
+          }},checked?'✓':''));
+
+          // Label
+          row.appendChild(el('div',{style:{flex:'1',minWidth:'0'}},
+            el('div',{style:{fontSize:'13px',color:checked?'var(--gold)':'var(--text)',fontWeight:'500'}},s.name),
+            el('div',{style:{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text-3)'}},
+              (s.date||'no date') + (an ? ' · λ'+an.peakWl+'nm · '+an.maxAb+' AU' : '')
+            )
+          ));
+
+          list.appendChild(row);
+        });
+        pickerBox.appendChild(list);
+
+        // ── Live CV table (shown when 2+ selected) ───────────────────────────
+        if(selIdx.size >= 2){
+          const chosen = parsedSamples.filter((_,i)=>selIdx.has(i));
+          const analyses = chosen.map(s=>({
+            name: s.name,
+            an: s.data.length ? Analytics.analyze(s.data, lot.size, lot.od) : null
+          })).filter(x=>x.an);
+
+          if(analyses.length >= 2){
+            function cv(vals){
+              const clean = vals.filter(v=>v!=null&&!isNaN(v));
+              if(clean.length < 2) return null;
+              const mean = clean.reduce((a,b)=>a+b,0)/clean.length;
+              if(mean===0) return null;
+              const sd = Math.sqrt(clean.reduce((s,v)=>s+(v-mean)**2,0)/(clean.length-1));
+              return {mean, sd, cv: (sd/Math.abs(mean))*100, vals: clean};
+            }
+
+            const cvCfg = CFG.get();
+            const metrics = [
+              { key:'peakWl',  label:'λmax',  unit:'nm',  decimals:1, warnCv:cvCfg.cvLambdaWarn, dangerCv:cvCfg.cvLambdaDanger },
+              { key:'maxAb',   label:'OD',    unit:'AU',  decimals:3, warnCv:cvCfg.cvOdWarn,     dangerCv:cvCfg.cvOdDanger     },
+              { key:'fwhm',    label:'FWHM',  unit:'nm',  decimals:1, warnCv:cvCfg.cvFwhmWarn,   dangerCv:cvCfg.cvFwhmDanger   },
+              { key:'tail',    label:'Tail',  unit:'AU',  decimals:4, warnCv:cvCfg.cvTailWarn,   dangerCv:cvCfg.cvTailDanger   },
+            ];
+
+            const cvBox = el('div',{style:{
+              background:'var(--bg)', border:'1px solid var(--border)',
+              borderRadius:'var(--radius)', marginBottom:'10px', overflow:'hidden'
+            }});
+
+            // Header
+            const hdr = el('div',{style:{
+              display:'grid',
+              gridTemplateColumns:`110px repeat(${analyses.length+2}, 1fr)`,
+              gap:'0', borderBottom:'1px solid var(--border)',
+              background:'var(--surface)'
+            }});
+            hdr.appendChild(el('div',{style:{
+              padding:'6px 10px', fontFamily:'var(--mono)', fontSize:'9px',
+              color:'var(--gold)', textTransform:'uppercase', letterSpacing:'0.1em'
+            }},'Metric'));
+            analyses.forEach(a=>{
+              hdr.appendChild(el('div',{style:{
+                padding:'6px 6px', fontFamily:'var(--mono)', fontSize:'9px',
+                color:'var(--text-3)', textAlign:'right', borderLeft:'1px solid var(--border)'
+              }},a.name));
+            });
+            hdr.appendChild(el('div',{style:{
+              padding:'6px 6px', fontFamily:'var(--mono)', fontSize:'9px',
+              color:'var(--text-2)', textAlign:'right', borderLeft:'1px solid var(--border)'
+            }},'Mean'));
+            hdr.appendChild(el('div',{style:{
+              padding:'6px 6px', fontFamily:'var(--mono)', fontSize:'9px',
+              color:'var(--text-2)', textAlign:'right', borderLeft:'1px solid var(--border)'
+            }},'%CV'));
+            cvBox.appendChild(hdr);
+
+            let anyOutlier = false;
+
+            metrics.forEach((m,mi)=>{
+              const vals = analyses.map(a=>a.an[m.key]);
+              const stat = cv(vals);
+              if(!stat) return;
+
+              const isBad   = stat.cv > m.dangerCv;
+              const isWarn  = !isBad && stat.cv > m.warnCv;
+              if(isBad) anyOutlier = true;
+
+              const cvColor = isBad ? 'var(--red)' : isWarn ? 'var(--amber)' : 'var(--green)';
+              const rowBg   = isBad ? 'rgba(224,92,92,0.05)' : 'transparent';
+
+              const row = el('div',{style:{
+                display:'grid',
+                gridTemplateColumns:`110px repeat(${analyses.length+2}, 1fr)`,
+                gap:'0', background:rowBg,
+                borderBottom: mi < metrics.length-1 ? '1px solid var(--border)' : 'none'
+              }});
+
+              // Metric label
+              row.appendChild(el('div',{style:{
+                padding:'7px 10px', fontSize:'11px', color:'var(--text-2)',
+                display:'flex', alignItems:'center', gap:'5px'
+              }},
+                el('span',{style:{color:cvColor,fontSize:'8px'}},'●'),
+                m.label,
+                el('span',{style:{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text-3)'}},m.unit)
+              ));
+
+              // Per-replicate values — flag outliers (>2 SD from mean)
+              vals.forEach(v=>{
+                const isOutlier = v!=null && Math.abs(v - stat.mean) > 2*stat.sd;
+                row.appendChild(el('div',{style:{
+                  padding:'7px 6px', fontFamily:'var(--mono)', fontSize:'11px',
+                  textAlign:'right', borderLeft:'1px solid var(--border)',
+                  color: isOutlier ? 'var(--red)' : 'var(--text)',
+                  fontWeight: isOutlier ? '700' : '400'
+                }}, v!=null ? v.toFixed(m.decimals) : '—'));
+              });
+
+              // Mean
+              row.appendChild(el('div',{style:{
+                padding:'7px 6px', fontFamily:'var(--mono)', fontSize:'11px',
+                textAlign:'right', borderLeft:'1px solid var(--border)',
+                color:'var(--text-2)'
+              }}, stat.mean.toFixed(m.decimals)));
+
+              // %CV
+              row.appendChild(el('div',{style:{
+                padding:'7px 6px', fontFamily:'var(--mono)', fontSize:'11px',
+                textAlign:'right', borderLeft:'1px solid var(--border)',
+                color: cvColor, fontWeight: isBad ? '700' : '400'
+              }}, stat.cv.toFixed(2)+'%'));
+
+              cvBox.appendChild(row);
+            });
+
+            // Footer note
+            const footNote = anyOutlier
+              ? '⚠ High CV detected — consider unchecking the outlier replicate before averaging'
+              : '✓ All replicates within acceptable CV — good to average';
+            cvBox.appendChild(el('div',{style:{
+              padding:'6px 10px', fontSize:'10px',
+              color: anyOutlier ? 'var(--amber)' : 'var(--text-3)',
+              fontFamily:'var(--mono)', borderTop:'1px solid var(--border)'
+            }}, footNote));
+
+            pickerBox.appendChild(cvBox);
+          }
+        }
+
+        // Action buttons
+        const btnRow = el('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap'}});
+
+        // ── Average selected ─────────────────────────────────────────────────
+        // Only shown when 2+ are checked. Interpolates all onto a common
+        // wavelength grid and loads the mean spectrum into the review form.
+        function averageScans(chosen){
+          // Build union of all wavelengths, then interpolate each scan onto it
+          const allWls = [...new Set(chosen.flatMap(s=>s.data.map(p=>p.wl)))].sort((a,b)=>a-b);
+          // Linear interpolation helper
+          function interp(data, wl){
+            if(!data.length) return 0;
+            if(wl<=data[0].wl) return data[0].ab;
+            if(wl>=data[data.length-1].wl) return data[data.length-1].ab;
+            let lo=0,hi=data.length-1;
+            while(hi-lo>1){ const mid=(lo+hi)>>1; if(data[mid].wl<=wl)lo=mid; else hi=mid; }
+            const t=(wl-data[lo].wl)/(data[hi].wl-data[lo].wl);
+            return data[lo].ab*(1-t)+data[hi].ab*t;
+          }
+          return allWls.map(wl=>({
+            wl,
+            ab: chosen.reduce((sum,s)=>sum+interp(s.data,wl),0)/chosen.length
+          }));
+        }
+
+        const canAvg = selIdx.size >= 2;
+        const avgBtn = el('button',{
+          class:'btn btn-ghost btn-sm',
+          style:{
+            flex:'1',justifyContent:'center',
+            borderColor: canAvg ? 'var(--gold)' : '',
+            color: canAvg ? 'var(--gold)' : '',
+            opacity: canAvg ? '1' : '0.38',
+            pointerEvents: canAvg ? 'auto' : 'none'
+          },
+          onClick:()=>{
+            const chosen = parsedSamples.filter((_,i)=>selIdx.has(i));
+            if(chosen.length < 2) return;
+            const averaged = averageScans(chosen);
+            parsedData = averaged;
+            previewAn = Analytics.analyze(averaged, lot.size, lot.od);
+            // Use the date of the last scan, note what was averaged
+            const lastDate = chosen.map(s=>s.date).filter(Boolean).sort().pop();
+            if(lastDate) scanDate = lastDate;
+            scanNotes = `Avg of ${chosen.length}: ${chosen.map(s=>s.name).join(', ')}`;
+            parsedSamples = null; // dismiss picker, show review form
+            rebuild();
+          }
+        }, canAvg ? `∑ Average ${selIdx.size} selected` : 'Select 2+ to average');
+
+        // ── Import selected ──────────────────────────────────────────────────
+        const importSelBtn = el('button',{
+          class:'btn btn-primary btn-sm',
+          style:{flex:'1',justifyContent:'center',
+            opacity:noneChecked?'0.38':'1',
+            pointerEvents:noneChecked?'none':'auto'
+          },
+          onClick:()=>{
+            const chosen = parsedSamples.filter((_,i)=>selIdx.has(i));
+            if(!chosen.length) return;
+            if(chosen.length === 1){
+              const s = chosen[0];
+              parsedData = s.data;
+              previewAn = s.data.length ? Analytics.analyze(s.data,lot.size,lot.od) : null;
+              if(s.date) scanDate = s.date;
+              if(s.name) scanNotes = s.name;
+              rebuild();
+            } else {
+              const df = Number(scanDil)||1;
+              chosen.forEach(s=>{
+                if(!s.data.length) return;
+                const anM = Analytics.analyze(s.data,lot.size,lot.od);
+                const corr = s.data.map(p=>({wl:p.wl,ab:p.ab*df}));
+                const anC = Analytics.analyze(corr,lot.size,lot.od);
+                DB.addScan(lot.id,{id:uid(),date:s.date||scanDate,op:scanOp,dil:df,
+                  notes:s.name||scanNotes,scanType,diluent:scanDiluent,
+                  measureMode:scanMeasureMode,sampleVolume:scanVolume,
+                  raw:s.data,an:anM,anC,created:Date.now()});
+              });
+              setState({modal:null});
+            }
+          }
+        }, selIdx.size===1 ? 'Review & import' :
+           selIdx.size===0 ? 'Select at least one' :
+           `⬇ Import ${selIdx.size} separately`);
+
+        btnRow.appendChild(avgBtn);
+        btnRow.appendChild(importSelBtn);
+        pickerBox.appendChild(btnRow);
+
+        // Insert after dropzone
+        const zone = body.querySelector('.dropzone');
+        if(zone) zone.after(pickerBox);
+        else body.insertBefore(pickerBox, body.firstChild);
+      }
+
+      rebuildPicker();
+    }
 
     if(previewAn){
       const odC=previewAn.odPctChange!=null?(Math.abs(previewAn.odPctChange)>20?'var(--red)':Math.abs(previewAn.odPctChange)>10?'var(--amber)':'var(--green)'):'var(--text-2)';
@@ -2778,17 +3152,27 @@ function buildScanModal(){
       }},'Save Scan'));
   }
 
+  let parsedSamples=null; // all samples from file, if multi-sample
+
   fileInput.addEventListener('change',e=>{
     const f=e.target.files[0];if(!f)return;
     fileName=f.name;
     const r=new FileReader();
     r.onload=ev=>{
       const res=parseFile(ev.target.result);
-      parsedData=res.data;
-      if(parsedData.length>0){
-        previewAn=Analytics.analyze(parsedData,lot.size,lot.od);
-        if(res.meta.measureDate)scanDate=res.meta.measureDate;
-        if(res.meta.sampleName&&!scanNotes)scanNotes=res.meta.sampleName;
+      parsedSamples=res.samples||null;
+
+      if(parsedSamples&&parsedSamples.length>1){
+        // Multi-sample file — don't auto-select, let user pick in rebuild()
+        parsedData=null; previewAn=null;
+        body._selIdx=null; // reset selection for new file
+      } else {
+        parsedData=res.data;
+        if(parsedData.length>0){
+          previewAn=Analytics.analyze(parsedData,lot.size,lot.od);
+          if(res.meta.measureDate)scanDate=res.meta.measureDate;
+          if(res.meta.sampleName&&!scanNotes)scanNotes=res.meta.sampleName;
+        }
       }
       rebuild();
     };
@@ -3000,6 +3384,40 @@ function buildInfo(){
     )
   );
 
+  // ── Replicate CV / Batch averaging ──
+  const s_cv=sec('📐','Replicate CV Calculator','Understanding the batch averaging quality check',
+    p('When you upload a multi-sample TSV file and select 2 or more scans, AuTrack automatically computes the ', el('strong',{},'Coefficient of Variation (CV%)'), ' across your replicates for each key spectral metric before you average them. This lets you spot outlier measurements before they corrupt your averaged scan.'),
+    callout(
+      el('strong',{},'What is CV%? '),
+      'CV% = (Standard Deviation / Mean) × 100. A low CV means your replicates agree closely. A high CV means one or more measurements diverged — often due to pipetting error, sample evaporation on the pedestal, or a contaminated measurement.'
+    ),
+    el('div',{class:'info-kpi-grid'},
+      kpiCard('λmax CV','%','SD(λmax) / mean(λmax) × 100','Based on NanoDrop One wavelength accuracy spec of ±1 nm. For a typical 530 nm AuNP peak, ±1 nm equals ~0.19% CV. Warn threshold: 0.2%. Danger: 0.5%. Values above 0.5% are unusual for identical samples and suggest a real measurement problem.'),
+      kpiCard('OD CV','%','SD(Abs max) / mean(Abs max) × 100','Directly from NanoDrop One User Guide (Rev E, 2021): typical reproducibility is ±2% CV for absorbance at concentrations above the noise floor. Warn: 2%. Danger: 5%. >5% almost always means inconsistent sample volume or pedestal contamination.'),
+      kpiCard('FWHM CV','%','SD(FWHM) / mean(FWHM) × 100','No direct NanoDrop spec — FWHM is a derived peak shape metric and is more variable than raw absorbance. Conservatively set to warn at 3%, danger at 7%. Refine these in Settings based on your own triplicate history.'),
+      kpiCard('Tail CV','%','SD(tail) / mean(tail) × 100','Tail values are near-zero for healthy particles, so even small absolute differences produce large CV%. Default thresholds are intentionally wide: warn 20%, danger 50%. Treat tail CV as a secondary indicator only.')
+    ),
+    p(el('strong',{},'Outlier flagging: '), 'Individual replicate values that are more than 2 standard deviations from the mean are highlighted in red. This is the standard statistical outlier criterion (Grubbs test threshold for n=3 at p=0.05 is ~1.15 SD, but 2 SD is a practical, less aggressive choice for triplicate measurements).'),
+    el('div',{class:'info-two-col'},
+      el('div',{},
+        p(el('strong',{},'When to exclude a replicate:')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num',style:{background:'var(--red)',color:'#fff'}},'!'),el('div',{class:'info-step-body'},'λmax is >1 nm away from the other two replicates — likely a different sample position or evaporation effect')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num',style:{background:'var(--red)',color:'#fff'}},'!'),el('div',{class:'info-step-body'},'OD is >10% different — likely incorrect volume pipetted or pedestal not cleaned between measurements')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num',style:{background:'var(--red)',color:'#fff'}},'!'),el('div',{class:'info-step-body'},'Spectrum shape looks visually different in the picker preview'))
+      ),
+      el('div',{},
+        p(el('strong',{},'When high CV is expected and acceptable:')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num',style:{background:'var(--text-3)',color:'#fff'}},'→'),el('div',{class:'info-step-body'},'Tail CV is high but absolute tail values are all <0.005 AU — the particles are healthy, just near instrument noise floor')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num',style:{background:'var(--text-3)',color:'#fff'}},'→'),el('div',{class:'info-step-body'},'OD CV is slightly elevated if samples were measured at different dilutions (should not happen in a triplicate run)')),
+        el('div',{class:'info-step'},el('div',{class:'info-step-num',style:{background:'var(--text-3)',color:'#fff'}},'→'),el('div',{class:'info-step-body'},'FWHM CV is higher for very concentrated samples near the absorbance upper limit where peak shape detection is less reliable'))
+      )
+    ),
+    callout(
+      el('strong',{},'Threshold source: '),
+      'OD CV thresholds are derived directly from the NanoDrop One User Guide (Thermo Fisher, 269-309102 Rev E, November 2021), which states ±2% typical reproducibility for absorbance. λmax thresholds are derived from the instrument\'s ±1 nm wavelength accuracy specification. FWHM and tail thresholds are conservative estimates with no direct instrument spec — configure them in Settings based on your own lab data.'
+    )
+  );
+
   // ── Workflow ──
   const s6=sec('🔄','Recommended QC Workflow','Best practices for AuNP stability monitoring',
     step(1,el('strong',{},'Incoming QC (Day 0): '),'When you receive a new lot, record the CoA OD in the lot settings, then immediately upload an initial UV-Vis scan as a baseline. This is your reference point for all future comparisons. Use the same dilution every time for consistency.'),
@@ -3032,7 +3450,7 @@ function buildInfo(){
       el('div',{class:'info-hero-title'},'AuTrack Reference Guide'),
       el('div',{class:'info-hero-sub'},'How the app works · KPI definitions · QC thresholds · Best practices')
     ),
-    el('div',{class:'info-body'},s0,s1,s2,s3,s4,s5,s6,s7)
+    el('div',{class:'info-body'},s0,s1,s2,s3,s4,s5,s_cv,s6,s7)
   );
 }
 
@@ -3320,6 +3738,28 @@ function buildSettings(){
         el('div',{class:'settings-grid'},
           numField('Tail rise warning','Mean 700–900nm AU rise to flag Drifting (recommend: 0.005)','tailRiseWarn','0.001','0.1','0.001'),
           numField('Tail rise danger','Mean 700–900nm AU rise to flag Aggregating (recommend: 0.02)','tailRiseDanger','0.002','0.5','0.001'),
+        ),
+        el('div',{class:'srule'},el('span',{class:'srule-txt'},'Replicate CV Thresholds — λmax'),el('div',{class:'srule-line'})),
+        el('div',{style:{padding:'0 0 8px 0',color:'var(--text-3)',fontSize:'12px'}},'Source: NanoDrop One User Guide (Rev E, 2021). Wavelength accuracy is specified at ±1 nm; for a 530 nm peak that is ~0.19% CV. Adjust to your own lab replicate data over time.'),
+        el('div',{class:'settings-grid'},
+          numField('λmax CV warn','%CV to flag replicate outlier (recommend: 0.2)','cvLambdaWarn','0.05','5','0.05'),
+          numField('λmax CV danger','%CV to flag as high variability (recommend: 0.5)','cvLambdaDanger','0.1','10','0.1'),
+        ),
+        el('div',{class:'srule'},el('span',{class:'srule-txt'},'Replicate CV Thresholds — OD (Absorbance)'),el('div',{class:'srule-line'})),
+        el('div',{style:{padding:'0 0 8px 0',color:'var(--text-3)',fontSize:'12px'}},'NanoDrop One spec: ±2% typical reproducibility for absorbance (concentrations above noise floor). Values >5% usually indicate pipetting inconsistency or sample prep issues.'),
+        el('div',{class:'settings-grid'},
+          numField('OD CV warn','%CV to flag replicate outlier (recommend: 2)','cvOdWarn','0.5','20','0.5'),
+          numField('OD CV danger','%CV to flag as high variability (recommend: 5)','cvOdDanger','1','50','1'),
+        ),
+        el('div',{class:'srule'},el('span',{class:'srule-txt'},'Replicate CV Thresholds — FWHM & Tail'),el('div',{class:'srule-line'})),
+        el('div',{style:{padding:'0 0 8px 0',color:'var(--text-3)',fontSize:'12px'}},'No direct NanoDrop spec exists for FWHM or tail CV — these are derived from peak shape calculations. Set conservatively and refine based on your own triplicate history.'),
+        el('div',{class:'settings-grid'},
+          numField('FWHM CV warn','%CV to flag FWHM outlier (recommend: 3)','cvFwhmWarn','0.5','20','0.5'),
+          numField('FWHM CV danger','%CV high variability (recommend: 7)','cvFwhmDanger','1','50','1'),
+        ),
+        el('div',{class:'settings-grid'},
+          numField('Tail CV warn','%CV to flag tail outlier (recommend: 20)','cvTailWarn','5','100','5'),
+          numField('Tail CV danger','%CV high variability (recommend: 50)','cvTailDanger','10','200','10'),
         ),
         el('div',{class:'srule'},el('span',{class:'srule-txt'},'Alerts'),el('div',{class:'srule-line'})),
         expiryWarnRow,
