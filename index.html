@@ -183,7 +183,7 @@ bootstrap().catch(err => {
   --gold-glow:rgba(200,168,75,0.12);
   --text:#C8D0E0;
   --text-2:#7A8AA8;
-  --text-3:#3E4D66;
+  --text-3:#6A7D9A;
   --green:#3ECF8E;
   --red:#E05C5C;
   --amber:#E0943C;
@@ -893,7 +893,7 @@ body.light .conj-box{border-color:rgba(42,127,192,0.3);background:rgba(42,127,19
 <body>
 <div id="loading-screen" style="position:fixed;inset:0;background:var(--bg,#080C12);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px;">
   <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;color:#C8A84B;letter-spacing:-0.02em;">Au</div>
-  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#3E4D66;text-transform:uppercase;letter-spacing:0.14em;">Connecting to Firestore…</div>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6A7D9A;text-transform:uppercase;letter-spacing:0.14em;">Connecting to Firestore…</div>
   <div style="width:40px;height:2px;background:#1C2333;border-radius:2px;overflow:hidden;position:relative;">
     <div style="position:absolute;left:-100%;width:100%;height:100%;background:#C8A84B;animation:slide 1.2s ease-in-out infinite;"></div>
   </div>
@@ -1040,6 +1040,11 @@ const Analytics={
 // Cache is kept live by onSnapshot listeners set up in the module <script> above.
 // ============================================================================
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,9);}
+function genScanLabel(scansInLot){
+  // Generate sequential human-readable scan ID: SCN-001, SCN-002, etc.
+  const next=(scansInLot?scansInLot.length:0)+1;
+  return 'SCN-'+String(next).padStart(3,'0');
+}
 
 const DB={
   getLots(){
@@ -1651,6 +1656,7 @@ function buildDetail(){
                   el('span',{class:'badge',style:{color:'var(--text-3)',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',fontSize:'10px'}},'stability');
     scanRows.appendChild(el('tr',{},
       el('td',{style:{fontFamily:'var(--mono)',fontSize:'12px'}},fmtDate(s.date)),
+      el('td',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--gold)',letterSpacing:'0.04em',whiteSpace:'nowrap'}},s.scanLabel||'—'),
       el('td',{style:{fontFamily:'var(--mono)'}},s.op||'—'),
       el('td',{},
         el('div',{style:{display:'flex',flexDirection:'column',gap:'3px'}},
@@ -1829,7 +1835,7 @@ function buildDetail(){
       ),
       el('div',{class:'tbl-wrap'},
         el('table',{},
-          el('thead',{},el('tr',{},...'Date,Operator,Scan Type,Diluent,Dil.,λ max,Abs max,ΔOD%,FWHM,P:T,Tail,280nm,Δ Theor.,Notes,'.split(',').map(h=>el('th',{},h)))),
+          el('thead',{},el('tr',{},...'Date,Scan ID,Operator,Scan Type,Diluent,Dil.,λ max,Abs max,ΔOD%,FWHM,P:T,Tail,280nm,Δ Theor.,Notes,'.split(',').map(h=>el('th',{},h)))),
           scanRows
         )
       ),
@@ -2178,7 +2184,7 @@ function buildSpectrumChart(scans,title,useLotLabel){
   const leg=el('div',{class:'leg'});
   scans.forEach((sc,i)=>{
     const col=SCAN_COLORS[i%SCAN_COLORS.length];
-    const lbl=useLotLabel?sc.lotLabel:fmtDate(sc.date)+(sc.op?' ('+sc.op+')':'');
+    const lbl=useLotLabel?sc.lotLabel:(sc.scanLabel||fmtDate(sc.date))+(sc.op?' ('+sc.op+')':'');
     const dot=el('span',{style:{width:'18px',height:'2.5px',background:col,display:'inline-block',borderRadius:'1px',flexShrink:'0',verticalAlign:'middle'}});
     const btn=el('button',{class:'leg-btn',style:{border:'1px solid '+col+'55',color:col,background:col+'10'}},dot,' ',lbl);
     btn.addEventListener('click',()=>{
@@ -2198,7 +2204,7 @@ function buildSpectrumChart(scans,title,useLotLabel){
 // LONGITUDINAL CHART (SVG) — Clean scientific style
 // ============================================================================
 function buildLongChart(scans,metric,label,unit,color,coaOd){
-  const data=scans.filter(s=>getAn(s,coaOd)&&getAn(s,coaOd)[metric]!=null).map(s=>({date:s.date,v:getAn(s,coaOd)[metric]}));
+  const data=scans.filter(s=>getAn(s,coaOd)&&getAn(s,coaOd)[metric]!=null).map(s=>({date:s.date,scanLabel:s.scanLabel||null,v:getAn(s,coaOd)[metric]}));
   if(data.length<2)return null;
 
   // ╔══════════════════════════════════════════════════════════╗
@@ -2390,12 +2396,13 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
     const x=xP(i).toFixed(2);
     const yBase=(PT+cH).toFixed(2);
     svg.appendChild(svgEl('line',{x1:x,y1:yBase,x2:x,y2:(PT+cH+TICK).toFixed(2),stroke:axC,strokeWidth:'1.2'}));
-    // Date label: MM/DD, placed TICK+13px below axis
+    // Use scan ID label if available, otherwise fall back to date
+    const xLbl=data[i].scanLabel||fmtDate(data[i].date).slice(0,5);
     svg.appendChild(svgEl('text',{
       x,y:(PT+cH+TICK+18).toFixed(1),
       fill:lblC,fontSize:'9.5',textAnchor:'middle',
       'font-family':'Inter,system-ui,monospace'
-    },fmtDate(data[i].date).slice(0,5)));
+    },xLbl));
   });
 
   // ── X axis title — fixed distance below date labels ──────────────────────
@@ -2993,7 +3000,8 @@ function buildScanModal(){
                 const anM = Analytics.analyze(s.data,lot.size,lot.od);
                 const corr = s.data.map(p=>({wl:p.wl,ab:p.ab*df}));
                 const anC = Analytics.analyze(corr,lot.size,lot.od);
-                DB.addScan(lot.id,{id:uid(),date:s.date||scanDate,op:scanOp,dil:df,
+                const existingScans=DB.getScans(lot.id);
+                DB.addScan(lot.id,{id:uid(),scanLabel:genScanLabel(existingScans),date:s.date||scanDate,op:scanOp,dil:df,
                   notes:s.name||scanNotes,scanType,diluent:scanDiluent,
                   measureMode:scanMeasureMode,sampleVolume:scanVolume,
                   raw:s.data,an:anM,anC,created:Date.now()});
@@ -3141,7 +3149,8 @@ function buildScanModal(){
         const anM=Analytics.analyze(parsedData,lot.size,lot.od);
         const corr=parsedData.map(p=>({wl:p.wl,ab:p.ab*df}));
         const anC=Analytics.analyze(corr,lot.size,lot.od);
-        const scanObj={id:uid(),date:scanDate,op:scanOp,dil:df,notes:scanNotes,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()};
+        const existingScans=DB.getScans(lot.id);
+        const scanObj={id:uid(),scanLabel:genScanLabel(existingScans),date:scanDate,op:scanOp,dil:df,notes:scanNotes,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()};
         // Attach conjugate data for post-conjugation scans
         if(scanType==='post-conjugation'){
           const conjId='CONJ-'+Math.random().toString(36).slice(2,8).toUpperCase();
@@ -3896,7 +3905,8 @@ function buildPasteModal(){
         const anM=Analytics.analyze(parsedData,lot.size,lot.od);
         const corr=parsedData.map(p=>({wl:p.wl,ab:p.ab*df}));
         const anC=Analytics.analyze(corr,lot.size,lot.od);
-        DB.addScan(lot.id,{id:uid(),date:scanDate,op:scanOp,dil:df,notes:scanNotes,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()});
+        const existingScans2=DB.getScans(lot.id);
+        DB.addScan(lot.id,{id:uid(),scanLabel:genScanLabel(existingScans2),date:scanDate,op:scanOp,dil:df,notes:scanNotes,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()});
         setState({modal:null});
       }
     },'Save Scan'));
@@ -3927,6 +3937,8 @@ function buildEditScanModal(){
     diluent:scan.diluent||'',measureMode:scan.measureMode||'pedestal',
     sampleVolume:scan.sampleVolume||'2'
   };
+  // Restore in-progress field state if re-rendering after scan type change
+  if(S.editScan&&S.editScan._f)Object.assign(f,S.editScan._f);
   // Conjugate fields for post-conjugation scans
   const cf={
     abCatalog:(scan.conj&&scan.conj.abCatalog)||'',
@@ -3936,6 +3948,7 @@ function buildEditScanModal(){
     conc:(scan.conj&&scan.conj.conc)||'',
     concUnit:(scan.conj&&scan.conj.concUnit)||'µg/mL'
   };
+  if(S.editScan&&S.editScan._cf)Object.assign(cf,S.editScan._cf);
   const body=el('div',{class:'modal-body'});
   function field(lbl,key,type,opts){
     type=type||'text';opts=opts||{};
@@ -3943,7 +3956,15 @@ function buildEditScanModal(){
     if(opts.select){
       inp=el('select',{class:'inp'});
       opts.select.forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;if(f[key]===v)o.selected=true;inp.appendChild(o);});
-      inp.addEventListener('change',e=>f[key]=e.target.value);
+      inp.addEventListener('change',e=>{
+        f[key]=e.target.value;
+        // Re-render modal when scan type changes so conjugate fields appear/disappear
+        if(key==='scanType'){
+          // Save current editScan state and re-render
+          Object.assign(S,{modal:'editScan',editScan:{lid,sid,_f:Object.assign({},f),_cf:Object.assign({},cf)}});
+          render();
+        }
+      });
     } else {
       inp=el('input',{class:'inp',type,value:f[key],placeholder:opts.ph||''});
       inp.addEventListener('input',e=>f[key]=e.target.value);
@@ -3977,7 +3998,7 @@ function buildEditScanModal(){
     field('Diluent','diluent','text',{ph:'e.g., DI water, PBS'})
   ));
   // If post-conjugation, show antibody fields
-  if(f.scanType==='post-conjugation'||(scan.scanType==='post-conjugation')){
+  if(f.scanType==='post-conjugation'){
     const conjBox=el('div',{class:'conj-box'});
     conjBox.appendChild(el('div',{class:'conj-box-hdr'},
       el('span',{class:'conj-box-icon'},'🔗'),
@@ -4005,9 +4026,14 @@ function buildEditScanModal(){
     el('button',{class:'btn btn-ghost',onClick:()=>setState({modal:null,editScan:null})},'Cancel'),
     el('button',{class:'btn btn-primary',onClick:()=>{
       const update={date:f.date,op:f.op,dil:Number(f.dil)||1,notes:f.notes,scanType:f.scanType,diluent:f.diluent,measureMode:f.measureMode,sampleVolume:f.sampleVolume};
-      // If post-conj, update conjugate fields too
-      if(scan.conj){
-        update.conj=Object.assign({},scan.conj,{abCatalog:cf.abCatalog,abLot:cf.abLot,abSupplier:cf.abSupplier,conjType:cf.conjType,conc:cf.conc,concUnit:cf.concUnit});
+      // If post-conj, update or create conjugate fields
+      if(f.scanType==='post-conjugation'){
+        const existingConj=scan.conj||{};
+        const conjId=existingConj.id||('CONJ-'+Math.random().toString(36).slice(2,8).toUpperCase());
+        update.conj=Object.assign({},existingConj,{id:conjId,abCatalog:cf.abCatalog,abLot:cf.abLot,abSupplier:cf.abSupplier,conjType:cf.conjType,conc:cf.conc,concUnit:cf.concUnit,lotId:lid,date:f.date});
+      } else if(f.scanType!=='post-conjugation'&&scan.scanType==='post-conjugation'){
+        // Switched away from post-conjugation — clear conj
+        update.conj=null;
       }
       DB.updateScan(lid,sid,update);
       setState({modal:null,editScan:null});
