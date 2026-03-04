@@ -333,7 +333,7 @@ input[type=date]{color-scheme:dark}
   pointer-events:none;
 }
 .stat-val{font-family:var(--mono);font-size:26px;font-weight:400;line-height:1;margin-bottom:5px}
-.stat-lbl{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em}
+.stat-lbl{font-family:var(--sans);font-size:12px;font-weight:500;color:var(--text-2);text-transform:none;letter-spacing:0}
 
 /* ─── PANEL ─── */
 .pnl{
@@ -350,8 +350,8 @@ input[type=date]{color-scheme:dark}
   gap:12px;flex-wrap:wrap;
 }
 .pnl-title{
-  font-family:var(--mono);font-size:10px;font-weight:600;
-  color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;
+  font-family:var(--sans);font-size:13px;font-weight:600;
+  color:var(--text);text-transform:none;letter-spacing:0;
 }
 .pnl-body{padding:20px}
 
@@ -361,8 +361,8 @@ table{width:100%;border-collapse:collapse}
 thead tr{border-bottom:1px solid var(--border)}
 th{
   padding:9px 14px;
-  font-family:var(--mono);font-size:9px;font-weight:600;
-  color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;
+  font-family:var(--sans);font-size:13px;font-weight:500;
+  color:var(--text-2);text-transform:none;letter-spacing:0;
   white-space:nowrap;text-align:left;
 }
 td{
@@ -442,8 +442,8 @@ tbody tr:last-child td{border-bottom:none}
 /* ─── FORMS ─── */
 .field{flex:1;min-width:175px}
 .lbl{
-  display:block;font-family:var(--mono);font-size:9px;font-weight:600;
-  color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;
+  display:block;font-family:var(--sans);font-size:12px;font-weight:500;
+  color:var(--text-2);text-transform:none;letter-spacing:0;
   margin-bottom:6px;
 }
 .inp{
@@ -516,9 +516,9 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.5}
   border-radius:var(--radius);
   padding:14px 18px;margin-bottom:18px;
 }
-.preview-lbl{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px}
+.preview-lbl{font-family:var(--sans);font-size:12px;font-weight:500;color:var(--text-2);text-transform:none;letter-spacing:0;margin-bottom:10px}
 .preview-row{display:flex;gap:28px;flex-wrap:wrap}
-.pi-key{font-family:var(--mono);font-size:9px;color:var(--text-2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px}
+.pi-key{font-family:var(--sans);font-size:11px;color:var(--text-2);text-transform:none;letter-spacing:0;margin-bottom:3px}
 .pi-val{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--text)}
 
 /* ─── COA GRID ─── */
@@ -533,7 +533,7 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.5}
   border-right:1px solid var(--border);
   border-bottom:1px solid var(--border);
 }
-.coa-k{font-family:var(--mono);font-size:9px;color:var(--text-2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px}
+.coa-k{font-family:var(--sans);font-size:11px;color:var(--text-2);text-transform:none;letter-spacing:0;margin-bottom:4px}
 .coa-v{font-family:var(--mono);font-size:13px;color:var(--text);word-break:break-word}
 .coa-note{margin-top:12px;padding:11px 15px;border-left:2px solid var(--gold-lo);background:rgba(200,168,75,0.04);border-radius:0 var(--radius) var(--radius) 0;font-size:13px;color:var(--text-2)}
 @media(max-width:900px){.coa{grid-template-columns:repeat(3,1fr)}}
@@ -565,7 +565,7 @@ svg.chart{width:100%;display:block}
   display:flex;align-items:center;gap:10px;
   margin:22px 0 14px;
 }
-.srule-txt{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;white-space:nowrap}
+.srule-txt{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text-2);text-transform:none;letter-spacing:0;white-space:nowrap}
 .srule-line{flex:1;height:1px;background:var(--border)}
 
 /* ─── COMPARE CHIPS ─── */
@@ -909,6 +909,28 @@ body.light .conj-box{border-color:rgba(42,127,192,0.3);background:rgba(42,127,19
 .conj-stat{display:flex;flex-direction:column;gap:1px;}
 .conj-stat-v{font-size:18px;font-weight:700;color:var(--text);font-family:var(--mono);}
 .conj-stat-k{font-size:10px;color:var(--text-2);text-transform:uppercase;letter-spacing:0.1em;}
+
+/* ── Curve Delta Comparison ── */
+.delta-panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;overflow:hidden;}
+.delta-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.delta-title{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--text);}
+.delta-body{padding:20px;}
+.delta-kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
+.delta-kpi{flex:1;min-width:130px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;position:relative;overflow:hidden;}
+.delta-kpi-lbl{font-size:12px;color:var(--text-2);margin-bottom:6px;}
+.delta-kpi-val{font-family:var(--mono);font-size:20px;font-weight:500;line-height:1;}
+.delta-kpi-arrow{font-size:13px;margin-right:4px;}
+.delta-kpi-sub{font-size:11px;color:var(--text-3);margin-top:4px;}
+.delta-chart-wrap{width:100%;overflow:hidden;position:relative;}
+.delta-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.delta-bar-lbl{font-size:12px;color:var(--text-2);min-width:90px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.delta-bar-track{flex:1;height:8px;background:var(--surface);border-radius:4px;overflow:hidden;position:relative;}
+.delta-bar-fill{height:100%;border-radius:4px;transition:width 0.6s cubic-bezier(0.34,1.56,0.64,1);}
+.delta-bar-val{font-family:var(--mono);font-size:11px;color:var(--text);min-width:60px;}
+@keyframes deltaFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.delta-animate{animation:deltaFadeIn 0.4s ease both;}
+@keyframes arrowPulse{0%,100%{transform:translateX(0)}50%{transform:translateX(3px)}}
+.arrow-anim{display:inline-block;animation:arrowPulse 1.5s ease-in-out infinite;}
 </style>
 </head>
 <body>
@@ -1931,6 +1953,285 @@ function buildDetail(){
 // ============================================================================
 // COMPARE
 // ============================================================================
+// ============================================================================
+// CURVE DELTA COMPARISON PANEL
+// ============================================================================
+function buildDeltaComparison(chartScans, lots) {
+  if (chartScans.length < 2) return null;
+
+  // Collect analytics for each scan
+  const entries = chartScans.map((sc, i) => {
+    const lot = lots.find(l => DB.getScans(l.id).find(s => s.id === sc.id));
+    const an = getAn(sc, lot ? lot.od : 0);
+    return { sc, an, color: SCAN_COLORS[i % SCAN_COLORS.length], label: sc.lotLabel || sc.scanLabel || fmtDate(sc.date) };
+  }).filter(e => e.an);
+
+  if (entries.length < 2) return null;
+
+  // Use first scan as reference
+  const ref = entries[0];
+
+  // KPI delta cards
+  const metrics = [
+    { key: 'peakWl',    label: 'λ max',       unit: 'nm',  good: d => Math.abs(d) < 5,   warn: d => Math.abs(d) < 15, fmt: v => v ? v.toFixed(1) : '—' },
+    { key: 'maxAb',     label: 'Abs max',      unit: 'AU',  good: d => Math.abs(d) < 0.05,warn: d => Math.abs(d) < 0.15, fmt: v => v ? v.toFixed(4) : '—' },
+    { key: 'fwhm',      label: 'FWHM',         unit: 'nm',  good: d => Math.abs(d) < 5,   warn: d => Math.abs(d) < 15, fmt: v => v ? v.toFixed(1) : '—' },
+    { key: 'peakTrough',label: 'P:T Ratio',    unit: '',    good: d => Math.abs(d) < 0.2, warn: d => Math.abs(d) < 0.5, fmt: v => v ? v.toFixed(2) : '—' },
+    { key: 'tail',      label: 'Tail (700–900)',unit: 'AU', good: d => Math.abs(d) < 0.005,warn: d => Math.abs(d) < 0.02, fmt: v => v != null ? v.toFixed(4) : '—' },
+    { key: 'odPctChange',label: 'ΔOD%',        unit: '%',   good: d => Math.abs(d) < 5,   warn: d => Math.abs(d) < 15, fmt: v => v != null ? (v > 0 ? '+' : '') + v.toFixed(1) + '%' : '—' },
+  ];
+
+  const container = el('div', { class: 'delta-panel delta-animate' });
+
+  // Header
+  const hdr = el('div', { class: 'delta-header' },
+    el('div', { class: 'delta-title' }, '📊 Curve Delta Analysis'),
+    el('div', { style: { fontSize: '12px', color: 'var(--text-3)' } },
+      'Reference: ',
+      el('span', { style: { color: ref.color, fontFamily: 'var(--mono)', fontWeight: '600' } }, ref.label)
+    )
+  );
+  container.appendChild(hdr);
+
+  const body = el('div', { class: 'delta-body' });
+
+  // ── Per-comparison section ─────────────────────────────────────────────
+  entries.slice(1).forEach((cmp, ci) => {
+    const secTitle = el('div', {
+      style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', marginTop: ci > 0 ? '24px' : '0' }
+    },
+      el('span', { style: { width: '12px', height: '12px', borderRadius: '50%', background: ref.color, display: 'inline-block', flexShrink: '0' } }),
+      el('span', { class: 'arrow-anim', style: { color: 'var(--text-3)', fontSize: '16px' } }, ' → '),
+      el('span', { style: { width: '12px', height: '12px', borderRadius: '50%', background: cmp.color, display: 'inline-block', flexShrink: '0' } }),
+      el('span', { style: { fontSize: '13px', fontWeight: '600', color: 'var(--text)' } }, ref.label + '  →  ' + cmp.label)
+    );
+    body.appendChild(secTitle);
+
+    // KPI delta cards
+    const kpiRow = el('div', { class: 'delta-kpi-row' });
+    metrics.forEach(m => {
+      const refVal = ref.an[m.key];
+      const cmpVal = cmp.an[m.key];
+      if (refVal == null || cmpVal == null) return;
+      const delta = cmpVal - refVal;
+      const absDelta = Math.abs(delta);
+      const isGood = m.good(delta);
+      const isWarn = !isGood && m.warn(delta);
+      const color = isGood ? 'var(--green)' : isWarn ? 'var(--amber)' : 'var(--red)';
+      const arrow = delta > 0.0001 ? '↑' : delta < -0.0001 ? '↓' : '→';
+      const arrowColor = m.key === 'fwhm' || m.key === 'tail'
+        ? (delta > 0 ? 'var(--red)' : delta < 0 ? 'var(--green)' : 'var(--text-3)')
+        : color;
+      const pctChange = refVal !== 0 ? ((delta / Math.abs(refVal)) * 100).toFixed(1) : null;
+
+      const card = el('div', { class: 'delta-kpi', style: { borderTop: '2px solid ' + color } },
+        el('div', { class: 'delta-kpi-lbl' }, m.label),
+        el('div', { class: 'delta-kpi-val', style: { color } },
+          el('span', { class: 'delta-kpi-arrow', style: { color: arrowColor } }, arrow),
+          (delta > 0 ? '+' : '') + (Math.abs(delta) < 0.00001 ? '0' : m.fmt ? (delta > 0 ? '+' : '') + (m.key !== 'odPctChange' ? absDelta.toFixed(m.key === 'peakWl' || m.key === 'fwhm' ? 1 : 4) + (m.unit ? ' ' + m.unit : '') : absDelta.toFixed(1) + '%') : delta)
+        ),
+        el('div', { class: 'delta-kpi-sub' },
+          m.fmt(refVal) + ' → ' + m.fmt(cmpVal),
+          pctChange != null && m.key !== 'odPctChange' ? el('span', { style: { color, marginLeft: '6px' } }, '(' + (Number(pctChange) > 0 ? '+' : '') + pctChange + '%)') : null
+        )
+      );
+      kpiRow.appendChild(card);
+    });
+    body.appendChild(kpiRow);
+
+    // ── Spectral comparison bar chart (peak region metrics) ──────────
+    const barMetrics = [
+      { key: 'peakWl', label: 'λ max (nm)', unit: 'nm', fmt: v => v ? v.toFixed(1) : '—' },
+      { key: 'maxAb', label: 'Abs max (AU)', unit: 'AU', fmt: v => v ? v.toFixed(4) : '—' },
+      { key: 'fwhm', label: 'FWHM (nm)', unit: 'nm', fmt: v => v ? v.toFixed(1) : '—' },
+      { key: 'peakTrough', label: 'P:T Ratio', unit: '', fmt: v => v ? v.toFixed(2) : '—' },
+    ].filter(m => ref.an[m.key] != null && cmp.an[m.key] != null);
+
+    if (barMetrics.length) {
+      const barTitle = el('div', { style: { fontSize: '12px', fontWeight: '600', color: 'var(--text-2)', marginBottom: '10px', marginTop: '16px' } }, 'Side-by-side comparison');
+      body.appendChild(barTitle);
+
+      barMetrics.forEach(m => {
+        const maxV = Math.max(ref.an[m.key], cmp.an[m.key]);
+        const refPct = (ref.an[m.key] / maxV * 100).toFixed(1);
+        const cmpPct = (cmp.an[m.key] / maxV * 100).toFixed(1);
+
+        const rowWrap = el('div', { style: { marginBottom: '14px' } },
+          el('div', { style: { fontSize: '11px', color: 'var(--text-3)', marginBottom: '6px' } }, m.label)
+        );
+
+        // ref bar
+        const refBar = el('div', { class: 'delta-bar-row' },
+          el('div', { class: 'delta-bar-lbl', style: { color: ref.color, fontFamily: 'var(--mono)', fontSize: '11px' } }, ref.label.length > 12 ? ref.label.slice(0, 12) + '…' : ref.label),
+          el('div', { class: 'delta-bar-track' },
+            el('div', { class: 'delta-bar-fill', style: { width: '0%', background: ref.color + 'BB' } })
+          ),
+          el('div', { class: 'delta-bar-val', style: { color: ref.color } }, m.fmt(ref.an[m.key]) + (m.unit ? ' ' + m.unit : ''))
+        );
+        // cmp bar
+        const cmpBar = el('div', { class: 'delta-bar-row' },
+          el('div', { class: 'delta-bar-lbl', style: { color: cmp.color, fontFamily: 'var(--mono)', fontSize: '11px' } }, cmp.label.length > 12 ? cmp.label.slice(0, 12) + '…' : cmp.label),
+          el('div', { class: 'delta-bar-track' },
+            el('div', { class: 'delta-bar-fill', style: { width: '0%', background: cmp.color + 'BB' } })
+          ),
+          el('div', { class: 'delta-bar-val', style: { color: cmp.color } }, m.fmt(cmp.an[m.key]) + (m.unit ? ' ' + m.unit : ''))
+        );
+
+        rowWrap.appendChild(refBar);
+        rowWrap.appendChild(cmpBar);
+        body.appendChild(rowWrap);
+
+        // Animate bars in after paint
+        setTimeout(() => {
+          refBar.querySelector('.delta-bar-fill').style.width = refPct + '%';
+          cmpBar.querySelector('.delta-bar-fill').style.width = cmpPct + '%';
+        }, 80 + ci * 40);
+      });
+    }
+
+    // ── Spectral shift SVG — shows diff curve ─────────────────────
+    const refRaw = getRaw(ref.sc);
+    const cmpRaw = getRaw(cmp.sc);
+    if (refRaw.length > 10 && cmpRaw.length > 10) {
+      // Interpolate cmp onto ref wavelengths
+      function interp(raw, wl) {
+        for (let i = 1; i < raw.length; i++) {
+          if (raw[i].wl >= wl) {
+            const t = (wl - raw[i-1].wl) / (raw[i].wl - raw[i-1].wl);
+            return raw[i-1].ab + t * (raw[i].ab - raw[i-1].ab);
+          }
+        }
+        return null;
+      }
+      const wlMin2 = Math.max(270, Math.min(refRaw[0].wl, cmpRaw[0].wl));
+      const wlMax2 = Math.min(850, Math.max(refRaw[refRaw.length-1].wl, cmpRaw[cmpRaw.length-1].wl));
+      const diffPts = [];
+      refRaw.filter(p => p.wl >= wlMin2 && p.wl <= wlMax2).forEach(p => {
+        const cv = interp(cmpRaw, p.wl);
+        if (cv != null) diffPts.push({ wl: p.wl, d: cv - p.ab });
+      });
+
+      if (diffPts.length > 5) {
+        const dMin = Math.min(0, ...diffPts.map(p => p.d));
+        const dMax = Math.max(0, ...diffPts.map(p => p.d));
+        const pad = Math.max(Math.abs(dMax - dMin) * 0.15, 0.001);
+        const lo = dMin - pad, hi = dMax + pad;
+        const SW = 560, SH = 110, SPL = 42, SPR = 14, SPT = 12, SPB = 28;
+        const scW = SW - SPL - SPR, scH = SH - SPT - SPB;
+        const xp = wl => SPL + (wl - wlMin2) / (wlMax2 - wlMin2) * scW;
+        const yp = d => SPT + scH - (d - lo) / (hi - lo) * scH;
+        const zero = yp(0);
+
+        const ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('viewBox', `0 0 ${SW} ${SH}`);
+        svg.setAttribute('style', 'width:100%;display:block;margin-top:16px');
+
+        // background
+        const bg = document.createElementNS(ns, 'rect');
+        bg.setAttribute('x', SPL); bg.setAttribute('y', SPT);
+        bg.setAttribute('width', scW); bg.setAttribute('height', scH);
+        bg.setAttribute('fill', document.body.classList.contains('light') ? '#fff' : '#0E131C');
+        svg.appendChild(bg);
+
+        // zero line
+        const zl = document.createElementNS(ns, 'line');
+        zl.setAttribute('x1', SPL); zl.setAttribute('x2', SPL + scW);
+        zl.setAttribute('y1', zero); zl.setAttribute('y2', zero);
+        zl.setAttribute('stroke', 'rgba(255,255,255,0.12)'); zl.setAttribute('stroke-dasharray', '4,3');
+        svg.appendChild(zl);
+
+        // positive fill (cmp > ref)
+        const posD = diffPts.filter((p, i) => p.d >= 0 || (i > 0 && diffPts[i-1].d >= 0));
+        const negD = diffPts.filter((p, i) => p.d <= 0 || (i > 0 && diffPts[i-1].d <= 0));
+
+        // area fill
+        const areaPath = document.createElementNS(ns, 'path');
+        let aD = diffPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${xp(p.wl).toFixed(1)},${yp(p.d).toFixed(1)}`).join(' ');
+        aD += ` L${xp(diffPts[diffPts.length-1].wl).toFixed(1)},${zero.toFixed(1)} L${xp(diffPts[0].wl).toFixed(1)},${zero.toFixed(1)} Z`;
+        areaPath.setAttribute('d', aD);
+        areaPath.setAttribute('fill', 'url(#diffGrad' + ci + ')');
+        areaPath.setAttribute('opacity', '0.5');
+
+        const defs = document.createElementNS(ns, 'defs');
+        const grad = document.createElementNS(ns, 'linearGradient');
+        grad.setAttribute('id', 'diffGrad' + ci);
+        grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0'); grad.setAttribute('x2', '0'); grad.setAttribute('y2', '1');
+        const s1 = document.createElementNS(ns, 'stop');
+        s1.setAttribute('offset', '0%'); s1.setAttribute('stop-color', cmp.color); s1.setAttribute('stop-opacity', '0.6');
+        const s2 = document.createElementNS(ns, 'stop');
+        s2.setAttribute('offset', '100%'); s2.setAttribute('stop-color', cmp.color); s2.setAttribute('stop-opacity', '0.05');
+        grad.appendChild(s1); grad.appendChild(s2);
+        defs.appendChild(grad);
+        svg.appendChild(defs);
+        svg.appendChild(areaPath);
+
+        // diff line
+        const linePath = document.createElementNS(ns, 'path');
+        linePath.setAttribute('d', diffPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${xp(p.wl).toFixed(1)},${yp(p.d).toFixed(1)}`).join(' '));
+        linePath.setAttribute('fill', 'none');
+        linePath.setAttribute('stroke', cmp.color);
+        linePath.setAttribute('stroke-width', '1.5');
+        svg.appendChild(linePath);
+
+        // Annotate peak shift with arrow
+        const maxDiffPt = diffPts.reduce((a, b) => Math.abs(b.d) > Math.abs(a.d) ? b : a, diffPts[0]);
+        const ax = xp(maxDiffPt.wl), ay = yp(maxDiffPt.d);
+        const arrowDir = maxDiffPt.d >= 0 ? -1 : 1;
+        const arrowLine = document.createElementNS(ns, 'line');
+        arrowLine.setAttribute('x1', ax); arrowLine.setAttribute('y1', zero);
+        arrowLine.setAttribute('x2', ax); arrowLine.setAttribute('y2', ay + arrowDir * 4);
+        arrowLine.setAttribute('stroke', maxDiffPt.d >= 0 ? 'var(--green)' : 'var(--red)');
+        arrowLine.setAttribute('stroke-width', '1.5');
+        arrowLine.setAttribute('marker-end', 'url(#arrowhead' + ci + ')');
+        svg.appendChild(arrowLine);
+
+        const arrowDefs2 = document.createElementNS(ns, 'defs');
+        const marker = document.createElementNS(ns, 'marker');
+        marker.setAttribute('id', 'arrowhead' + ci);
+        marker.setAttribute('markerWidth', '6'); marker.setAttribute('markerHeight', '6');
+        marker.setAttribute('refX', '3'); marker.setAttribute('refY', '3');
+        marker.setAttribute('orient', 'auto');
+        const poly = document.createElementNS(ns, 'polygon');
+        poly.setAttribute('points', '0 0, 6 3, 0 6');
+        poly.setAttribute('fill', maxDiffPt.d >= 0 ? 'var(--green)' : 'var(--red)');
+        marker.appendChild(poly);
+        arrowDefs2.appendChild(marker);
+        svg.appendChild(arrowDefs2);
+
+        // label
+        const lbl2 = document.createElementNS(ns, 'text');
+        lbl2.setAttribute('x', Math.min(SW - SPR - 60, Math.max(SPL + 2, ax - 30)));
+        lbl2.setAttribute('y', (Math.min(ay, zero) - 4).toFixed(1));
+        lbl2.setAttribute('fill', maxDiffPt.d >= 0 ? 'var(--green)' : 'var(--red)');
+        lbl2.setAttribute('font-size', '9'); lbl2.setAttribute('font-family', 'var(--mono)');
+        lbl2.textContent = (maxDiffPt.d >= 0 ? '+' : '') + maxDiffPt.d.toFixed(4) + ' AU @ ' + maxDiffPt.wl.toFixed(0) + 'nm';
+        svg.appendChild(lbl2);
+
+        // Y axis
+        const yAxis = document.createElementNS(ns, 'line');
+        yAxis.setAttribute('x1', SPL); yAxis.setAttribute('y1', SPT);
+        yAxis.setAttribute('x2', SPL); yAxis.setAttribute('y2', SPT + scH);
+        yAxis.setAttribute('stroke', 'rgba(160,180,208,0.3)'); yAxis.setAttribute('stroke-width', '1');
+        svg.appendChild(yAxis);
+
+        // Chart title
+        const chartLbl = document.createElementNS(ns, 'text');
+        chartLbl.setAttribute('x', SPL + 4); chartLbl.setAttribute('y', SPT + 10);
+        chartLbl.setAttribute('fill', 'rgba(160,180,208,0.5)');
+        chartLbl.setAttribute('font-size', '9'); chartLbl.setAttribute('font-family', 'var(--mono)');
+        chartLbl.textContent = 'Δ Absorbance (cmp − ref)';
+        svg.appendChild(chartLbl);
+
+        body.appendChild(svg);
+      }
+    }
+  });
+
+  container.appendChild(body);
+  return container;
+}
+
 function buildCompare(){
   const lots=DB.getLots();const sel=S.compare;
   const q=(S.compareSearch||'').toLowerCase();
@@ -2058,6 +2359,7 @@ function buildCompare(){
     ),
     scanSelPanel,
     chartScans.length?buildSpectrumChart(chartScans,'Scan Comparison Overlay',true):'',
+    chartScans.length >= 2 ? buildDeltaComparison(chartScans, lots) : null,
     rows.length?el('div',{class:'pnl'},
       el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},'Comparison Summary')),
       el('div',{class:'tbl-wrap'},
@@ -2277,8 +2579,9 @@ function buildSpectrumChart(scans,title,useLotLabel){
   let zoomWl = { min: wlMin, max: wlMax };
   let zoomAb = { min: abR.min, max: abR.max };
   let isDragging = false, dragStart = null, dragRect = null;
+  let zoomEnabled = false;
 
-  const wrap = el('div', { style: { width:'100%', overflow:'hidden', position:'relative', userSelect:'none', cursor:'crosshair' } });
+  const wrap = el('div', { style: { width:'100%', overflow:'hidden', position:'relative', userSelect:'none' } });
 
   function rebuildSVG() {
     wrap.innerHTML = '';
@@ -2307,7 +2610,10 @@ function buildSpectrumChart(scans,title,useLotLabel){
     if (!svgEl2) return;
     let sel = null;
 
+    svgEl2.style.cursor = zoomEnabled ? 'crosshair' : 'default';
+
     svgEl2.addEventListener('mousedown', e => {
+      if (!zoomEnabled) return;
       if (e.button !== 0) return;
       const rect = svgEl2.getBoundingClientRect();
       const scaleX = W / rect.width;
@@ -2329,7 +2635,7 @@ function buildSpectrumChart(scans,title,useLotLabel){
     });
 
     svgEl2.addEventListener('mousemove', e => {
-      if (!isDragging || !sel) return;
+      if (!zoomEnabled || !isDragging || !sel) return;
       const rect = svgEl2.getBoundingClientRect();
       const scaleX = W / rect.width;
       const scaleY = H / rect.height;
@@ -2344,7 +2650,7 @@ function buildSpectrumChart(scans,title,useLotLabel){
     });
 
     const endDrag = e => {
-      if (!isDragging) return;
+      if (!zoomEnabled || !isDragging) return;
       isDragging = false;
       if (!sel) return;
       const rect = svgEl2.getBoundingClientRect();
@@ -2372,10 +2678,11 @@ function buildSpectrumChart(scans,title,useLotLabel){
     };
 
     svgEl2.addEventListener('mouseup', endDrag);
-    svgEl2.addEventListener('mouseleave', e => { if (isDragging) { isDragging = false; sel = null; rebuildSVG(); } });
+    svgEl2.addEventListener('mouseleave', e => { if (zoomEnabled && isDragging) { isDragging = false; sel = null; rebuildSVG(); } });
 
     // Scroll to zoom (mouse wheel)
     svgEl2.addEventListener('wheel', e => {
+      if (!zoomEnabled) return;
       e.preventDefault();
       const rect = svgEl2.getBoundingClientRect();
       const scaleX = W / rect.width;
@@ -2388,8 +2695,6 @@ function buildSpectrumChart(scans,title,useLotLabel){
       const abRange = zoomAb.max - zoomAb.min;
       const pivotWl = zoomWl.min + (mx / cW) * wlRange;
       const pivotAb = zoomAb.max - (my / cH) * abRange;
-      const newWlRange = wlRange * factor;
-      const newAbRange = abRange * factor;
       // Clamp to original data bounds
       let nWlMin = Math.max(wlMin, pivotWl - (pivotWl - zoomWl.min) * factor);
       let nWlMax = Math.min(wlMax, pivotWl + (zoomWl.max - pivotWl) * factor);
@@ -2399,12 +2704,36 @@ function buildSpectrumChart(scans,title,useLotLabel){
       zoomAb = { min: nAbMin, max: nAbMax };
       rebuildSVG();
     }, { passive: false });
-
-    // Cursor hint
-    svgEl2.style.cursor = 'crosshair';
   }
 
   rebuildSVG();
+
+  // Zoom toggle button — positioned above the graph
+  const zoomBtn = el('button', {
+    style: {
+      padding:'6px 18px', fontSize:'13px', fontFamily:'var(--sans)', fontWeight:'500',
+      background:'rgba(74,159,224,0.15)', border:'1px solid rgba(74,159,224,0.45)',
+      color:'#4A9FE0', borderRadius:'5px', cursor:'pointer',
+      transition:'all 0.15s', display:'block', marginBottom:'10px'
+    }
+  }, '⤡ Zoom');
+  zoomBtn.addEventListener('click', () => {
+    zoomEnabled = !zoomEnabled;
+    if (zoomEnabled) {
+      zoomBtn.style.background = 'rgba(74,159,224,0.30)';
+      zoomBtn.style.borderColor = 'rgba(74,159,224,0.8)';
+      zoomBtn.style.color = '#7BBFF0';
+      zoomBtn.style.boxShadow = '0 0 10px rgba(74,159,224,0.25)';
+    } else {
+      zoomBtn.style.background = 'rgba(74,159,224,0.15)';
+      zoomBtn.style.borderColor = 'rgba(74,159,224,0.45)';
+      zoomBtn.style.color = '#4A9FE0';
+      zoomBtn.style.boxShadow = 'none';
+    }
+    rebuildSVG();
+  });
+
+  const graphArea = el('div', {style:{position:'relative'}}, zoomBtn, wrap);
 
   const leg=el('div',{class:'leg'});
   scans.forEach((sc,i)=>{
@@ -2419,12 +2748,14 @@ function buildSpectrumChart(scans,title,useLotLabel){
     leg.appendChild(btn);
   });
 
+  const hintEl = el('span',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)'}}, '⤡ drag to zoom · scroll to zoom · ↺ reset');
+
   return el('div',{class:'pnl'},
     el('div',{class:'pnl-head'},
       el('span',{class:'pnl-title'},title),
-      el('span',{style:{fontSize:'10px',color:'var(--text-2)',fontFamily:'var(--mono)'}}, '⤡ drag to zoom · scroll to zoom · ↺ reset')
+      hintEl
     ),
-    el('div',{class:'pnl-body'},wrap,leg)
+    el('div',{class:'pnl-body'},graphArea,leg)
   );
 }
 
