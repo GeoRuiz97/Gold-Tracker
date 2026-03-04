@@ -141,16 +141,20 @@ async function bootstrap() {
   // Apply theme before first render
   if ((window._cache.cfg.theme || 'dark') === 'light') document.body.classList.add('light');
 
-  // Seed demo data if Firestore is empty
-  if (window._cache.lots.length === 0) {
-    await window.seedDemoFirestore();
-    // Reload after seed
-    const ls2 = await getDocs(collection(db, 'lots'));
-    window._cache.lots = ls2.docs.map(d => ({ id: d.id, ...d.data() }));
-    for (const ld of ls2.docs) {
-      const ss = await getDocs(collection(db, 'lots', ld.id, 'scans'));
-      window._cache.scansMap[ld.id] = ss.docs.map(d => ({ id: d.id, ...d.data() }));
-    }
+  // No demo seeding — start fresh
+
+  // Backfill scanLabel for any existing scans that don't have one
+  for (const lot of window._cache.lots) {
+    const scans = (window._cache.scansMap[lot.id] || []).slice().sort((a,b)=>(a.created||0)-(b.created||0));
+    let changed = false;
+    scans.forEach((s, i) => {
+      if (!s.scanLabel) {
+        s.scanLabel = 'SCN-' + String(i + 1).padStart(3, '0');
+        window._FS.updateScan(lot.id, s.id, { scanLabel: s.scanLabel }).catch(()=>{});
+        changed = true;
+      }
+    });
+    if (changed) window._cache.scansMap[lot.id] = scans;
   }
 
   window._fsReady = true;
@@ -171,19 +175,19 @@ bootstrap().catch(err => {
 
 <style>
 :root{
-  --bg:#080C12;
-  --panel:#0C1018;
-  --surface:#10151E;
-  --surface-hi:#161C28;
-  --border:#1C2333;
-  --border-hi:#253045;
-  --gold:#C8A84B;
-  --gold-hi:#DFC06A;
-  --gold-lo:#7A6128;
-  --gold-glow:rgba(200,168,75,0.12);
-  --text:#C8D0E0;
-  --text-2:#7A8AA8;
-  --text-3:#6A7D9A;
+  --bg:#060A10;
+  --panel:#0F1520;
+  --surface:#161E2C;
+  --surface-hi:#1C2638;
+  --border:#2E3D58;
+  --border-hi:#3C5078;
+  --gold:#D4B050;
+  --gold-hi:#EAD070;
+  --gold-lo:#8A7030;
+  --gold-glow:rgba(212,176,80,0.14);
+  --text:#EDF2FF;
+  --text-2:#B4C4DC;
+  --text-3:#8A9EC0;
   --green:#3ECF8E;
   --red:#E05C5C;
   --amber:#E0943C;
@@ -282,7 +286,7 @@ input[type=date]{color-scheme:dark}
 .nav{display:flex;gap:1px}
 .nb{
   padding:6px 13px;border-radius:var(--radius);
-  border:none;cursor:pointer;font-size:13px;font-weight:400;
+  border:none;cursor:pointer;font-size:13px;font-weight:500;
   background:transparent;color:var(--text-2);
   transition:color 0.13s,background 0.13s;
 }
@@ -329,7 +333,7 @@ input[type=date]{color-scheme:dark}
   pointer-events:none;
 }
 .stat-val{font-family:var(--mono);font-size:26px;font-weight:400;line-height:1;margin-bottom:5px}
-.stat-lbl{font-family:var(--mono);font-size:9px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em}
+.stat-lbl{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em}
 
 /* ─── PANEL ─── */
 .pnl{
@@ -346,8 +350,8 @@ input[type=date]{color-scheme:dark}
   gap:12px;flex-wrap:wrap;
 }
 .pnl-title{
-  font-family:var(--mono);font-size:10px;font-weight:500;
-  color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;
+  font-family:var(--mono);font-size:10px;font-weight:600;
+  color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;
 }
 .pnl-body{padding:20px}
 
@@ -357,13 +361,13 @@ table{width:100%;border-collapse:collapse}
 thead tr{border-bottom:1px solid var(--border)}
 th{
   padding:9px 14px;
-  font-family:var(--mono);font-size:9px;font-weight:500;
-  color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;
+  font-family:var(--mono);font-size:9px;font-weight:600;
+  color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;
   white-space:nowrap;text-align:left;
 }
 td{
   padding:12px 14px;font-size:13px;
-  color:var(--text-2);
+  color:var(--text);
   border-bottom:1px solid var(--border);
 }
 tbody tr:last-child td{border-bottom:none}
@@ -381,6 +385,23 @@ tbody tr:last-child td{border-bottom:none}
   content:'';width:4px;height:4px;border-radius:50%;
   background:currentColor;flex-shrink:0;
 }
+.status-badge:hover{filter:brightness(1.15);}
+.status-popover{
+  z-index:9999;background:var(--surface-hi);border:1px solid var(--border-hi);
+  border-radius:8px;padding:14px 16px;min-width:320px;max-width:420px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  font-family:var(--sans);font-size:13px;
+}
+.status-pop-title{font-size:11px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;}
+.status-pop-note{font-size:12px;color:var(--text-2);}
+.status-pop-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);}
+.status-pop-row:last-child{border-bottom:none;padding-bottom:0;}
+.status-pop-left{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.status-pop-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;}
+.status-pop-lbl{font-size:12px;color:var(--text);font-weight:500;}
+.status-pop-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+.status-pop-val{font-family:var(--mono);font-size:12px;font-weight:600;}
+.status-pop-detail{font-size:10.5px;color:var(--text-2);text-align:right;}
 
 /* ─── BUTTONS ─── */
 .btn{
@@ -421,8 +442,8 @@ tbody tr:last-child td{border-bottom:none}
 /* ─── FORMS ─── */
 .field{flex:1;min-width:175px}
 .lbl{
-  display:block;font-family:var(--mono);font-size:9px;font-weight:500;
-  color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;
+  display:block;font-family:var(--mono);font-size:9px;font-weight:600;
+  color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;
   margin-bottom:6px;
 }
 .inp{
@@ -463,7 +484,7 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.5}
 .modal-body{padding:22px 24px}
 .modal-close{
   background:transparent;border:none;cursor:pointer;
-  color:var(--text-3);font-size:18px;line-height:1;padding:2px 4px;
+  color:var(--text-2);font-size:18px;line-height:1;padding:2px 4px;
   transition:color 0.13s;flex-shrink:0;
 }
 .modal-close:hover{color:var(--text)}
@@ -485,7 +506,7 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.5}
 .dropzone.loaded{border-color:var(--green);border-style:solid;background:rgba(62,207,142,0.04)}
 .dz-icon{font-size:28px;margin-bottom:10px;opacity:0.6}
 .dz-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px}
-.dz-sub{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+.dz-sub{font-family:var(--mono);font-size:11px;color:var(--text-2)}
 
 /* ─── SCAN PREVIEW ─── */
 .preview{
@@ -495,9 +516,9 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.5}
   border-radius:var(--radius);
   padding:14px 18px;margin-bottom:18px;
 }
-.preview-lbl{font-family:var(--mono);font-size:9px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px}
+.preview-lbl{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px}
 .preview-row{display:flex;gap:28px;flex-wrap:wrap}
-.pi-key{font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px}
+.pi-key{font-family:var(--mono);font-size:9px;color:var(--text-2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px}
 .pi-val{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--text)}
 
 /* ─── COA GRID ─── */
@@ -512,7 +533,7 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.5}
   border-right:1px solid var(--border);
   border-bottom:1px solid var(--border);
 }
-.coa-k{font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px}
+.coa-k{font-family:var(--mono);font-size:9px;color:var(--text-2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px}
 .coa-v{font-family:var(--mono);font-size:13px;color:var(--text);word-break:break-word}
 .coa-note{margin-top:12px;padding:11px 15px;border-left:2px solid var(--gold-lo);background:rgba(200,168,75,0.04);border-radius:0 var(--radius) var(--radius) 0;font-size:13px;color:var(--text-2)}
 @media(max-width:900px){.coa{grid-template-columns:repeat(3,1fr)}}
@@ -522,7 +543,7 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.5}
 .back-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px}
 .back-info{display:flex;align-items:center;gap:14px;flex-shrink:0}
 .lot-id{font-family:var(--mono);font-size:18px;font-weight:500;color:var(--gold)}
-.lot-sub{font-size:12px;color:var(--text-3);margin-top:3px}
+.lot-sub{font-size:12px;color:var(--text-2);margin-top:3px}
 /* Toolbar: right side of back-row */
 .toolbar{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .toolbar-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
@@ -544,7 +565,7 @@ svg.chart{width:100%;display:block}
   display:flex;align-items:center;gap:10px;
   margin:22px 0 14px;
 }
-.srule-txt{font-family:var(--mono);font-size:9px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:0.12em;white-space:nowrap}
+.srule-txt{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.12em;white-space:nowrap}
 .srule-line{flex:1;height:1px;background:var(--border)}
 
 /* ─── COMPARE CHIPS ─── */
@@ -558,7 +579,7 @@ svg.chart{width:100%;display:block}
 .chip.on{border-color:var(--gold-lo);background:rgba(200,168,75,0.08);color:var(--gold)}
 
 /* ─── EMPTY ─── */
-.empty{text-align:center;padding:52px 20px;color:var(--text-3)}
+.empty{text-align:center;padding:52px 20px;color:var(--text-2)}
 .empty-icon{font-size:32px;opacity:0.3;margin-bottom:12px}
 .empty-msg{font-size:13px;font-family:var(--mono)}
 
@@ -622,7 +643,7 @@ svg.chart{width:100%;display:block}
 }
 .setting-row:last-child{border-bottom:none}
 .setting-lbl{font-size:13px;color:var(--text)}
-.setting-sub{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:2px}
+.setting-sub{font-family:var(--mono);font-size:10px;color:var(--text-2);margin-top:2px}
 .setting-inp{width:90px;text-align:right}
 .seg{display:flex;gap:0;border:1px solid var(--border-hi);border-radius:var(--radius);overflow:hidden}
 .seg-btn{
@@ -845,14 +866,14 @@ body.light .conj-box{border-color:rgba(42,127,192,0.3);background:rgba(42,127,19
 .conj-box-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(74,159,224,0.2);}
 .conj-box-icon{font-size:16px;}
 .conj-box-title{font-size:12px;font-weight:600;color:var(--blue);}
-.conj-box-sub{font-size:10.5px;color:var(--text-3);margin-top:1px;}
+.conj-box-sub{font-size:10.5px;color:var(--text-2);margin-top:1px;}
 
 /* ── Conjugates panel (in lot detail) ── */
 .conj-record{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;}
 .conj-id-badge{background:rgba(74,159,224,0.12);border:1px solid rgba(74,159,224,0.3);border-radius:4px;padding:4px 10px;font-size:10px;font-weight:700;font-family:var(--mono);color:var(--blue);white-space:nowrap;letter-spacing:0.04em;}
 .conj-meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 16px;}
 .conj-meta-item{}
-.conj-meta-k{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;}
+.conj-meta-k{font-size:10px;color:var(--text-2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;}
 .conj-meta-v{font-size:12px;font-family:var(--mono);color:var(--text);}
 .conj-type-pill{display:inline-block;font-size:10px;padding:2px 7px;border-radius:3px;background:rgba(155,111,224,0.12);border:1px solid rgba(155,111,224,0.3);color:var(--purple);font-weight:600;}
 
@@ -867,10 +888,10 @@ body.light .conj-box{border-color:rgba(42,127,192,0.3);background:rgba(42,127,19
 .conj-card-top{padding:14px 16px 12px;border-bottom:1px solid var(--border);}
 .conj-card-id-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
 .conj-card-id{background:rgba(74,159,224,0.12);border:1px solid rgba(74,159,224,0.3);border-radius:4px;padding:3px 10px;font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--blue);letter-spacing:0.06em;}
-.conj-card-date{font-size:11px;color:var(--text-3);font-family:var(--mono);margin-left:auto;}
+.conj-card-date{font-size:11px;color:var(--text-2);font-family:var(--mono);margin-left:auto;}
 .conj-card-lot{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);font-weight:600;cursor:pointer;}
 .conj-card-lot:hover{color:var(--gold);}
-.conj-card-lot-tag{font-size:10px;color:var(--text-3);font-weight:400;}
+.conj-card-lot-tag{font-size:10px;color:var(--text-2);font-weight:400;}
 .conj-card-body{padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px;}
 .conj-card-field{}
 .conj-card-fk{font-size:9.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;}
@@ -882,18 +903,18 @@ body.light .conj-box{border-color:rgba(42,127,192,0.3);background:rgba(42,127,19
 .conj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px;}
 .conj-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;}
 .conj-empty-icon{font-size:36px;margin-bottom:12px;opacity:0.5;}
-.conj-empty-msg{font-size:14px;color:var(--text-3);max-width:320px;line-height:1.6;}
+.conj-empty-msg{font-size:14px;color:var(--text-2);max-width:320px;line-height:1.6;}
 .conj-search-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
 .conj-stats-bar{display:flex;gap:20px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:18px;flex-wrap:wrap;}
 .conj-stat{display:flex;flex-direction:column;gap:1px;}
 .conj-stat-v{font-size:18px;font-weight:700;color:var(--text);font-family:var(--mono);}
-.conj-stat-k{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;}
+.conj-stat-k{font-size:10px;color:var(--text-2);text-transform:uppercase;letter-spacing:0.1em;}
 </style>
 </head>
 <body>
 <div id="loading-screen" style="position:fixed;inset:0;background:var(--bg,#080C12);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px;">
   <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;color:#C8A84B;letter-spacing:-0.02em;">Au</div>
-  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6A7D9A;text-transform:uppercase;letter-spacing:0.14em;">Connecting to Firestore…</div>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A8DA8;text-transform:uppercase;letter-spacing:0.14em;">Connecting to Firestore…</div>
   <div style="width:40px;height:2px;background:#1C2333;border-radius:2px;overflow:hidden;position:relative;">
     <div style="position:absolute;left:-100%;width:100%;height:100%;background:#C8A84B;animation:slide 1.2s ease-in-out infinite;"></div>
   </div>
@@ -1344,6 +1365,67 @@ function svgEl(tag,attrs){
 function mkBadge(text,color){
   return el('span',{class:'badge',style:{color,background:color.startsWith('var')?'rgba(255,255,255,0.06)':color+'18',border:'1px solid '+color.replace('var(--','rgba(').replace(')',',.25)').replace('--','')}},text);
 }
+function mkStatusBadge(qc){
+  const color=qc.color;
+  const badge=el('span',{
+    class:'badge status-badge',
+    style:{color,background:color.startsWith('var')?'rgba(255,255,255,0.06)':color+'18',
+      border:'1px solid '+color.replace('var(--','rgba(').replace(')',',.25)').replace('--',''),
+      cursor:'pointer',userSelect:'none',position:'relative'}
+  },qc.status+' ⓘ');
+  badge.addEventListener('click',e=>{
+    e.stopPropagation();
+    // Remove any existing popover
+    const existing=document.querySelector('.status-popover');
+    if(existing){existing.remove();if(existing._badge===badge)return;}
+    const cfg=CFG.get();
+    const rows=[];
+    if(qc.drift!=null){
+      const danger=qc.drift>cfg.driftDanger,warn=qc.drift>cfg.driftWarn;
+      rows.push({label:'Peak drift',val:qc.drift.toFixed(2)+' nm',status:danger?'danger':warn?'warn':'ok',
+        detail:danger?'Exceeds danger threshold ('+cfg.driftDanger+' nm)':warn?'Exceeds warning threshold ('+cfg.driftWarn+' nm)':'Within tolerance (threshold: '+cfg.driftWarn+' nm)'});
+    }
+    if(qc.broad!=null){
+      const danger=qc.broad>cfg.fwhmDanger,warn=qc.broad>cfg.fwhmWarn;
+      rows.push({label:'FWHM broadening',val:qc.broad.toFixed(2)+' nm',status:danger?'danger':warn?'warn':'ok',
+        detail:danger?'Exceeds danger threshold ('+cfg.fwhmDanger+' nm)':warn?'Exceeds warning threshold ('+cfg.fwhmWarn+' nm)':'Within tolerance (threshold: '+cfg.fwhmWarn+' nm)'});
+    }
+    if(qc.ptDrop!=null){
+      const danger=qc.ptDrop>cfg.ptDropDanger,warn=qc.ptDrop>cfg.ptDropWarn;
+      rows.push({label:'P:T drop',val:qc.ptDrop.toFixed(3),status:danger?'danger':warn?'warn':'ok',
+        detail:danger?'Exceeds danger threshold ('+cfg.ptDropDanger+')':warn?'Exceeds warning threshold ('+cfg.ptDropWarn+')':'Within tolerance (threshold: '+cfg.ptDropWarn+')'});
+    }
+    if(qc.tailRise!=null){
+      const danger=qc.tailRise>cfg.tailRiseDanger,warn=qc.tailRise>cfg.tailRiseWarn;
+      rows.push({label:'Tail rise',val:qc.tailRise.toFixed(5)+' AU',status:danger?'danger':warn?'warn':'ok',
+        detail:danger?'Exceeds danger threshold ('+cfg.tailRiseDanger+')':warn?'Exceeds warning threshold ('+cfg.tailRiseWarn+')':'Within tolerance (threshold: '+cfg.tailRiseWarn+')'});
+    }
+    const pop=el('div',{class:'status-popover'});
+    pop._badge=badge;
+    pop.appendChild(el('div',{class:'status-pop-title'},qc.status==='No Data'?'Status: No Data':'Status Reason — '+qc.status));
+    if(qc.status==='No Data'){
+      pop.appendChild(el('div',{class:'status-pop-note'},'At least 2 scans are required to compute trend status.'));
+    } else {
+      rows.forEach(r=>{
+        const rowEl=el('div',{class:'status-pop-row'});
+        const dot=el('span',{class:'status-pop-dot',style:{background:r.status==='danger'?'var(--red)':r.status==='warn'?'var(--amber)':'var(--green)'}});
+        const left=el('div',{class:'status-pop-left'},dot,el('span',{class:'status-pop-lbl'},r.label));
+        const right=el('div',{class:'status-pop-right'},el('span',{class:'status-pop-val',style:{color:r.status==='danger'?'var(--red)':r.status==='warn'?'var(--amber)':'var(--green)'}},r.val),el('span',{class:'status-pop-detail'},r.detail));
+        rowEl.appendChild(left);rowEl.appendChild(right);
+        pop.appendChild(rowEl);
+      });
+    }
+    // Position near badge
+    const rect=badge.getBoundingClientRect();
+    pop.style.position='fixed';
+    pop.style.top=(rect.bottom+6)+'px';
+    pop.style.left=Math.max(8,rect.left-120)+'px';
+    document.body.appendChild(pop);
+    const dismiss=ev=>{if(!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',dismiss);}};
+    setTimeout(()=>document.addEventListener('click',dismiss),0);
+  });
+  return badge;
+}
 function makePath(pts){
   if(!pts.length)return'';
   return pts.map((p,i)=>(i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
@@ -1458,8 +1540,7 @@ function buildHdr(){
     ),
     el('div',{class:'hdr-right'},
       el('span',{id:'sync-status',style:{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text-3)',letterSpacing:'0.05em'}},'Connecting…'),
-      el('button',{class:'theme-btn',title:isLight?'Switch to dark mode':'Switch to light mode',onClick:toggleTheme},isLight?'☀':'🌙'),
-      el('button',{class:'btn-reset',onClick:resetDemo},'Reset Demo')
+      el('button',{class:'theme-btn',title:isLight?'Switch to dark mode':'Switch to light mode',onClick:toggleTheme},isLight?'☀':'🌙')
     )
   );
 }
@@ -1555,7 +1636,7 @@ function buildDash(){
 
   const tbody=el('tbody',{});
   if(!filtered.length){
-    tbody.appendChild(el('tr',{},el('td',{colspan:'11'},el('div',{class:'empty'},el('div',{class:'empty-icon'},'🔬'),el('div',{class:'empty-msg'},q?'No lots match your search':'No lots registered yet')))));
+    tbody.appendChild(el('tr',{},el('td',{colspan:'12'},el('div',{class:'empty'},el('div',{class:'empty-icon'},'🔬'),el('div',{class:'empty-msg'},q?'No lots match your search':'No lots registered yet')))));
   } else {
     filtered.forEach(l=>{
       const lastAn=l.last?getAn(l.last):null;
@@ -1568,7 +1649,8 @@ function buildDash(){
         el('td',{},buildExpiryPill(l.expires)),
         el('td',{style:{fontFamily:'var(--mono)'}},l.cnt),
         el('td',{style:{fontFamily:'var(--mono)'}},lastAn&&lastAn.peakWl?lastAn.peakWl+' nm':'—'),
-        el('td',{},mkBadge(l.qc.status,l.qc.color)),
+        el('td',{style:{fontFamily:'var(--mono)'}},lastAn&&lastAn.maxAb?lastAn.maxAb+' AU':'—'),
+        el('td',{},mkStatusBadge(l.qc)),
         el('td',{},el('button',{class:'btn btn-ghost btn-sm',onClick:e=>{e.stopPropagation();setState({lot:l.id,modal:'scan'});}},'+\u202FScan')),
         el('td',{},el('button',{class:'btn btn-del btn-sm',onClick:e=>{e.stopPropagation();if(confirm('Delete lot '+l.lotNumber+'? This cannot be undone.')){DB.deleteLot(l.id);render();}}},'Delete'))
       );
@@ -1594,7 +1676,7 @@ function buildDash(){
       ),
       el('div',{class:'tbl-wrap'},
         el('table',{},
-          el('thead',{},el('tr',{},...'Lot Number,Supplier,Size,OD,Received,Expiry,Scans,λ max (last),Status,,'.split(',').map(h=>el('th',{},h)))),
+          el('thead',{},el('tr',{},...'Lot Number,Supplier,Size,OD,Received,Expiry,Scans,λ max (last),Abs max (last),Status,,'.split(',').map(h=>el('th',{},h)))),
           tbody
         )
       )
@@ -1657,6 +1739,7 @@ function buildDetail(){
     scanRows.appendChild(el('tr',{},
       el('td',{style:{fontFamily:'var(--mono)',fontSize:'12px'}},fmtDate(s.date)),
       el('td',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--gold)',letterSpacing:'0.04em',whiteSpace:'nowrap'}},s.scanLabel||'—'),
+      el('td',{style:{fontSize:'12px',color:'var(--text)',maxWidth:'150px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},s.description||'—'),
       el('td',{style:{fontFamily:'var(--mono)'}},s.op||'—'),
       el('td',{},
         el('div',{style:{display:'flex',flexDirection:'column',gap:'3px'}},
@@ -1727,7 +1810,7 @@ function buildDetail(){
         el('button',{class:'btn btn-ghost btn-sm',onClick:()=>setState({view:'dashboard'})},'← Back'),
         el('div',{style:{display:'flex',alignItems:'center',gap:'10px'}},
           el('div',{class:'lot-id'},lot.lotNumber),
-          mkBadge(qc.status,qc.color)
+          mkStatusBadge(qc)
         )
       ),
       el('div',{class:'toolbar'},
@@ -1835,7 +1918,7 @@ function buildDetail(){
       ),
       el('div',{class:'tbl-wrap'},
         el('table',{},
-          el('thead',{},el('tr',{},...'Date,Scan ID,Operator,Scan Type,Diluent,Dil.,λ max,Abs max,ΔOD%,FWHM,P:T,Tail,280nm,Δ Theor.,Notes,'.split(',').map(h=>el('th',{},h)))),
+          el('thead',{},el('tr',{},...'Date,Scan ID,Description,Operator,Scan Type,Diluent,Dil.,λ max,Abs max,ΔOD%,FWHM,P:T,Tail,280nm,Δ Theor.,Notes,'.split(',').map(h=>el('th',{},h)))),
           scanRows
         )
       ),
@@ -1993,7 +2076,7 @@ function buildCompare(){
               el('td',{style:{fontFamily:'var(--mono)'}},a?a.maxAb+' AU':'—'),
               el('td',{style:{fontFamily:'var(--mono)'}},a&&a.fwhm?a.fwhm+' nm':'—'),
               el('td',{style:{fontFamily:'var(--mono)'}},r.qc.drift!=null?r.qc.drift.toFixed(1)+' nm':'—'),
-              el('td',{},mkBadge(r.qc.status,r.qc.color))
+              el('td',{},mkStatusBadge(r.qc))
             );
           }))
         )
@@ -2048,28 +2131,44 @@ function buildSpectrumChart(scans,title,useLotLabel){
 
   // OriginLab theme colors — works in both dark & light mode
   const isLight=document.body.classList.contains('light');
-  const axisColor=isLight?'#222':'#C8D0E0';
-  const tickColor=isLight?'#222':'#C8D0E0';
-  const gridColor=isLight?'rgba(0,0,0,0.06)':'rgba(255,255,255,0.04)';
+  const axisColor=isLight?'#222':'#C8D8F0';
+  const tickColor=isLight?'#222':'#C8D8F0';
+  const gridColor=isLight?'rgba(0,0,0,0.06)':'rgba(255,255,255,0.06)';
   const bgColor=isLight?'#fff':'#0E131C';
-  const labelColor=isLight?'#333':'#8A9AB8';
-  const axisTitleColor=isLight?'#111':'#C8D0E0';
+  const labelColor=isLight?'#333':'#A0B4D0';
+  const axisTitleColor=isLight?'#111':'#D0DCF0';
   const TICK_LEN=5;
   const MINOR_TICK=3;
 
-  function buildSVG(){
+  function buildSVG(zwlMin, zwlMax, zabMin, zabMax){
+    // Use zoom bounds if provided, else full range
+    const curWlMin = zwlMin !== undefined ? zwlMin : wlMin;
+    const curWlMax = zwlMax !== undefined ? zwlMax : wlMax;
+    // Recompute ticks for current zoom window
+    const curAbMin = zabMin !== undefined ? zabMin : abR.min;
+    const curAbMax = zabMax !== undefined ? zabMax : abR.max;
+    const curXTicks = (() => {
+      const rawT = []; for(let t=Math.ceil(curWlMin/50)*50; t<=curWlMax; t+=50) rawT.push(t);
+      if(curWlMin<=280 && curWlMax>=280 && !rawT.includes(280)) rawT.push(280);
+      rawT.sort((a,b)=>a-b);
+      const xPt = wl => PL+(wl-curWlMin)/(curWlMax-curWlMin)*cW;
+      return rawT.filter((v,i,arr)=>i===0||xPt(v)-xPt(arr[i-1])>=30);
+    })();
+    const curYTicks = uvNiceTicks(curAbMin, curAbMax);
+    const xP = wl => PL+(wl-curWlMin)/(curWlMax-curWlMin)*cW;
+    const yP = ab => PT+cH-(ab-curAbMin)/(curAbMax-curAbMin)*cH;
     const s=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,class:'chart'});
 
     // Plot area fill (OriginLab white/near-white background inside axes)
     s.appendChild(svgEl('rect',{x:PL,y:PT,width:cW,height:cH,fill:bgColor}));
 
     // Subtle horizontal dotted gridlines (OriginLab default)
-    yTicks.forEach(v=>{
+    curYTicks.forEach(v=>{
       s.appendChild(svgEl('line',{x1:PL,y1:yP(v).toFixed(1),x2:PL+cW,y2:yP(v).toFixed(1),stroke:gridColor,strokeWidth:'1',strokeDasharray:'2,4'}));
     });
 
     // 280nm reference band
-    if(wlMin<=280){
+    if(curWlMin<=280 && curWlMax>=280){
       const x280=xP(280).toFixed(1);
       s.appendChild(svgEl('line',{x1:x280,y1:PT,x2:x280,y2:PT+cH,stroke:'#4A9FE0',strokeWidth:'1',strokeDasharray:'4,4',opacity:'0.5'}));
       s.appendChild(svgEl('text',{x:parseFloat(x280)+4,y:PT+19,fill:'#4A9FE0',fontSize:'8.5',opacity:'0.8','font-family':'Inter,sans-serif','font-weight':'500'},'280 nm'));
@@ -2113,7 +2212,7 @@ function buildSpectrumChart(scans,title,useLotLabel){
     }
     scans.forEach((sc,i)=>{
       if(!vis[i])return;
-      const raw=getRaw(sc).filter(p=>p.wl>=wlMin&&p.wl<=wlMax);
+      const raw=getRaw(sc).filter(p=>p.wl>=curWlMin&&p.wl<=curWlMax);
       if(!raw.length)return;
       // 5 nm smooth window handles 0.1 nm step noise; decimate to chart pixel width
       const pts = smoothAndDecimate(raw, 5, cW).map(p=>[xP(p.wl),yP(p.ab)]);
@@ -2131,28 +2230,24 @@ function buildSpectrumChart(scans,title,useLotLabel){
     s.appendChild(svgEl('line',{x1:PL+cW,y1:PT,x2:PL+cW,y2:PT+cH,stroke:axisColor,strokeWidth:'1',opacity:'0.5'}));
 
     // ── Tick marks — inward-pointing on bottom and left ─────────────────
-    xTicks.forEach(v=>{
+    curXTicks.forEach(v=>{
       const x=xP(v).toFixed(1);
-      // Major tick below axis
       s.appendChild(svgEl('line',{x1:x,y1:PT+cH,x2:x,y2:(PT+cH+TICK_LEN).toFixed(1),stroke:tickColor,strokeWidth:'1.5'}));
-      // Mirror tick on top
       s.appendChild(svgEl('line',{x1:x,y1:PT,x2:x,y2:(PT-MINOR_TICK).toFixed(1),stroke:tickColor,strokeWidth:'1',opacity:'0.4'}));
     });
-    yTicks.forEach(v=>{
+    curYTicks.forEach(v=>{
       const y=yP(v).toFixed(1);
-      // Major tick left of axis
       s.appendChild(svgEl('line',{x1:PL,y1:y,x2:(PL-TICK_LEN).toFixed(1),y2:y,stroke:tickColor,strokeWidth:'1.5'}));
-      // Mirror tick on right
       s.appendChild(svgEl('line',{x1:PL+cW,y1:y,x2:(PL+cW+MINOR_TICK).toFixed(1),y2:y,stroke:tickColor,strokeWidth:'1',opacity:'0.4'}));
     });
 
     // ── Axis tick labels ─────────────────────────────────────────────────
-    xTicks.forEach(v=>s.appendChild(svgEl('text',{
+    curXTicks.forEach(v=>s.appendChild(svgEl('text',{
       x:(xP(v)-20).toFixed(1),y:(PT+cH+TICK_LEN+13).toFixed(1),
       fill:labelColor,fontSize:'9',textAnchor:'middle',
       'font-family':'Inter,system-ui,sans-serif','font-weight':'400'
-    },String(v))));
-    yTicks.forEach(v=>{
+    },String(Math.round(v*10)/10))));
+    curYTicks.forEach(v=>{
       const t=typeof v==='number'&&v%1!==0?(Math.abs(v)<0.01?v.toFixed(4):v.toFixed(3)):String(v);
       s.appendChild(svgEl('text',{
         x:(PL-TICK_LEN-7).toFixed(1),y:(yP(v)+3.5).toFixed(1),
@@ -2178,8 +2273,138 @@ function buildSpectrumChart(scans,title,useLotLabel){
     return s;
   }
 
-  const wrap=el('div',{style:{width:'100%',overflow:'hidden'}});
-  wrap.appendChild(buildSVG());
+  // ── Zoom state ───────────────────────────────────────────────────────────
+  let zoomWl = { min: wlMin, max: wlMax };
+  let zoomAb = { min: abR.min, max: abR.max };
+  let isDragging = false, dragStart = null, dragRect = null;
+
+  const wrap = el('div', { style: { width:'100%', overflow:'hidden', position:'relative', userSelect:'none', cursor:'crosshair' } });
+
+  function rebuildSVG() {
+    wrap.innerHTML = '';
+    const s = buildSVG(zoomWl.min, zoomWl.max, zoomAb.min, zoomAb.max);
+    wrap.appendChild(s);
+
+    // Zoom reset button (only shown when zoomed)
+    const isZoomed = zoomWl.min !== wlMin || zoomWl.max !== wlMax;
+    if (isZoomed) {
+      const resetBtn = el('button', {
+        style: { position:'absolute', top:'6px', right:'6px', zIndex:'10',
+          padding:'3px 10px', fontSize:'11px', fontFamily:'var(--mono)',
+          background:'rgba(200,168,75,0.15)', border:'1px solid rgba(200,168,75,0.35)',
+          color:'var(--gold)', borderRadius:'4px', cursor:'pointer' }
+      }, '↺ Reset zoom');
+      resetBtn.addEventListener('click', () => {
+        zoomWl = { min: wlMin, max: wlMax };
+        zoomAb = { min: abR.min, max: abR.max };
+        rebuildSVG();
+      });
+      wrap.appendChild(resetBtn);
+    }
+
+    // Add drag-to-zoom interaction on SVG
+    const svgEl2 = wrap.querySelector('svg');
+    if (!svgEl2) return;
+    let sel = null;
+
+    svgEl2.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      const rect = svgEl2.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const scaleY = H / rect.height;
+      const sx = (e.clientX - rect.left) * scaleX;
+      const sy = (e.clientY - rect.top) * scaleY;
+      // Only start drag inside plot area
+      if (sx < PL || sx > PL + cW || sy < PT || sy > PT + cH) return;
+      isDragging = true;
+      dragStart = { x: sx, y: sy };
+      sel = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      sel.setAttribute('fill', 'rgba(200,168,75,0.10)');
+      sel.setAttribute('stroke', 'rgba(200,168,75,0.6)');
+      sel.setAttribute('stroke-width', '1');
+      sel.setAttribute('stroke-dasharray', '4,3');
+      sel.setAttribute('pointer-events', 'none');
+      svgEl2.appendChild(sel);
+      e.preventDefault();
+    });
+
+    svgEl2.addEventListener('mousemove', e => {
+      if (!isDragging || !sel) return;
+      const rect = svgEl2.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const scaleY = H / rect.height;
+      const cx = Math.max(PL, Math.min(PL + cW, (e.clientX - rect.left) * scaleX));
+      const cy = Math.max(PT, Math.min(PT + cH, (e.clientY - rect.top) * scaleY));
+      const rx = Math.min(dragStart.x, cx);
+      const ry = Math.min(dragStart.y, cy);
+      const rw = Math.abs(cx - dragStart.x);
+      const rh = Math.abs(cy - dragStart.y);
+      sel.setAttribute('x', rx); sel.setAttribute('y', ry);
+      sel.setAttribute('width', rw); sel.setAttribute('height', rh);
+    });
+
+    const endDrag = e => {
+      if (!isDragging) return;
+      isDragging = false;
+      if (!sel) return;
+      const rect = svgEl2.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const scaleY = H / rect.height;
+      const ex = Math.max(PL, Math.min(PL + cW, (e.clientX - rect.left) * scaleX));
+      const ey = Math.max(PT, Math.min(PT + cH, (e.clientY - rect.top) * scaleY));
+      const x1 = Math.min(dragStart.x, ex) - PL;
+      const x2 = Math.max(dragStart.x, ex) - PL;
+      const y1 = Math.min(dragStart.y, ey) - PT;
+      const y2 = Math.max(dragStart.y, ey) - PT;
+      sel = null;
+      // Only zoom if drag was large enough (>10px)
+      if ((x2 - x1) < 10 || (y2 - y1) < 10) { rebuildSVG(); return; }
+      // Convert pixel coords back to data coords using CURRENT zoom window
+      const curWlRange = zoomWl.max - zoomWl.min;
+      const curAbRange = zoomAb.max - zoomAb.min;
+      const newWlMin = zoomWl.min + (x1 / cW) * curWlRange;
+      const newWlMax = zoomWl.min + (x2 / cW) * curWlRange;
+      const newAbMax = zoomAb.max - (y1 / cH) * curAbRange;
+      const newAbMin = zoomAb.max - (y2 / cH) * curAbRange;
+      zoomWl = { min: newWlMin, max: newWlMax };
+      zoomAb = { min: newAbMin, max: newAbMax };
+      rebuildSVG();
+    };
+
+    svgEl2.addEventListener('mouseup', endDrag);
+    svgEl2.addEventListener('mouseleave', e => { if (isDragging) { isDragging = false; sel = null; rebuildSVG(); } });
+
+    // Scroll to zoom (mouse wheel)
+    svgEl2.addEventListener('wheel', e => {
+      e.preventDefault();
+      const rect = svgEl2.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const scaleY = H / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX - PL;
+      const my = (e.clientY - rect.top) * scaleY - PT;
+      if (mx < 0 || mx > cW || my < 0 || my > cH) return;
+      const factor = e.deltaY > 0 ? 1.25 : 0.8;
+      const wlRange = zoomWl.max - zoomWl.min;
+      const abRange = zoomAb.max - zoomAb.min;
+      const pivotWl = zoomWl.min + (mx / cW) * wlRange;
+      const pivotAb = zoomAb.max - (my / cH) * abRange;
+      const newWlRange = wlRange * factor;
+      const newAbRange = abRange * factor;
+      // Clamp to original data bounds
+      let nWlMin = Math.max(wlMin, pivotWl - (pivotWl - zoomWl.min) * factor);
+      let nWlMax = Math.min(wlMax, pivotWl + (zoomWl.max - pivotWl) * factor);
+      let nAbMin = Math.max(abR.min, pivotAb - (pivotAb - zoomAb.min) * factor);
+      let nAbMax = Math.min(abR.max * 1.05, pivotAb + (zoomAb.max - pivotAb) * factor);
+      zoomWl = { min: nWlMin, max: nWlMax };
+      zoomAb = { min: nAbMin, max: nAbMax };
+      rebuildSVG();
+    }, { passive: false });
+
+    // Cursor hint
+    svgEl2.style.cursor = 'crosshair';
+  }
+
+  rebuildSVG();
 
   const leg=el('div',{class:'leg'});
   scans.forEach((sc,i)=>{
@@ -2189,13 +2414,16 @@ function buildSpectrumChart(scans,title,useLotLabel){
     const btn=el('button',{class:'leg-btn',style:{border:'1px solid '+col+'55',color:col,background:col+'10'}},dot,' ',lbl);
     btn.addEventListener('click',()=>{
       vis[i]=!vis[i];btn.style.opacity=vis[i]?'1':'0.3';
-      wrap.innerHTML='';wrap.appendChild(buildSVG());
+      rebuildSVG();
     });
     leg.appendChild(btn);
   });
 
   return el('div',{class:'pnl'},
-    el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},title)),
+    el('div',{class:'pnl-head'},
+      el('span',{class:'pnl-title'},title),
+      el('span',{style:{fontSize:'10px',color:'var(--text-2)',fontFamily:'var(--mono)'}}, '⤡ drag to zoom · scroll to zoom · ↺ reset')
+    ),
     el('div',{class:'pnl-body'},wrap,leg)
   );
 }
@@ -2268,8 +2496,8 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
   const axC   =isLight?'rgba(0,0,0,0.22)'  :'rgba(255,255,255,0.18)';
   const gridC =isLight?'rgba(0,0,0,0.05)'  :'rgba(255,255,255,0.04)';
   const plotBg=isLight?'rgba(0,0,0,0.02)'  :'rgba(0,0,0,0.22)';
-  const lblC  =isLight?'#666'              :'#6B7A90';
-  const titC  =isLight?'#333'              :'#9AABB8';
+  const lblC  =isLight?'#555'              :'#90A8C8';
+  const titC  =isLight?'#222'              :'#B8CCEC';
 
   // Smart Y decimal precision
   const yRange=yMax-yMin||1;
@@ -2696,9 +2924,7 @@ function buildScanModal(){
   if(!lot)return el('div',{});
   let parsedData=null,previewAn=null,fileName='';
   const today=new Date().toISOString().split('T')[0];
-  let scanDate=today,scanOp='',scanDil='1',scanNotes='',scanType='stability',scanDiluent='',scanMeasureMode='pedestal',scanVolume='2';
-  // Conjugate fields (post-conjugation only)
-  let conjAbCatalog='',conjAbLot='',conjAbSupplier='',conjType='passive',conjConc='',conjConcUnit='µg/mL';
+  let scanDate=today,scanOp='',scanDil='1',scanNotes='',scanDescription='',scanType='stability',scanDiluent='',scanMeasureMode='pedestal',scanVolume='2';
 
   const body=el('div',{class:'modal-body'});
   const foot=el('div',{class:'modal-foot'});
@@ -3139,7 +3365,12 @@ function buildScanModal(){
 
     const nI=el('input',{class:'inp',placeholder:'e.g., Monthly stability check',value:scanNotes});
     nI.addEventListener('input',e=>scanNotes=e.target.value);
-    body.appendChild(el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),nI));
+    const descI=el('input',{class:'inp',placeholder:'e.g., Lot release, post-conjugation QC…',value:scanDescription});
+    descI.addEventListener('input',e=>scanDescription=e.target.value);
+    body.appendChild(el('div',{class:'frow'},
+      el('div',{class:'field'},el('label',{class:'lbl'},'Description'),descI),
+      el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),nI)
+    ));
 
     foot.appendChild(el('button',{class:'btn btn-ghost',onClick:()=>setState({modal:null})},'Cancel'));
     foot.appendChild(el('button',{class:'btn btn-primary',style:{opacity:parsedData?'1':'0.38',pointerEvents:parsedData?'auto':'none'},
@@ -3150,7 +3381,7 @@ function buildScanModal(){
         const corr=parsedData.map(p=>({wl:p.wl,ab:p.ab*df}));
         const anC=Analytics.analyze(corr,lot.size,lot.od);
         const existingScans=DB.getScans(lot.id);
-        const scanObj={id:uid(),scanLabel:genScanLabel(existingScans),date:scanDate,op:scanOp,dil:df,notes:scanNotes,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()};
+        const scanObj={id:uid(),scanLabel:genScanLabel(existingScans),date:scanDate,op:scanOp,dil:df,notes:scanNotes,description:scanDescription,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()};
         // Attach conjugate data for post-conjugation scans
         if(scanType==='post-conjugation'){
           const conjId='CONJ-'+Math.random().toString(36).slice(2,8).toUpperCase();
@@ -3797,15 +4028,13 @@ function buildPasteModal(){
   if(!lot)return el('div',{});
   let parsedData=null,previewAn=null;
   const today=new Date().toISOString().split('T')[0];
-  let scanDate=today,scanOp='',scanDil='1',scanNotes='',scanType='stability',scanDiluent='',scanMeasureMode='pedestal',scanVolume='2';
-
+  let scanDate=today,scanOp='',scanDil='1',scanNotes='',scanDescription='',scanType='stability',scanDiluent='',scanMeasureMode='pedestal',scanVolume='2';
   const body=el('div',{class:'modal-body'});
   const foot=el('div',{class:'modal-foot'});
   let parseMsg=null;
-
   function tryParse(text){
-    if(!text.trim()){parsedData=null;previewAn=null;parseMsg=null;return;}
     const res=parseFile(text);
+    if(!res||!res.data||res.data.length===0){parsedData=null;previewAn=null;parseMsg={ok:false,msg:'No valid wavelength/absorbance pairs found'};return;}
     parsedData=res.data;
     if(parsedData.length>0){
       previewAn=Analytics.analyze(parsedData,lot.size,lot.od);
@@ -3893,7 +4122,12 @@ function buildPasteModal(){
 
     const nI=el('input',{class:'inp',placeholder:'e.g., Manual entry, post-conjugation check',value:scanNotes});
     nI.addEventListener('input',e=>scanNotes=e.target.value);
-    body.appendChild(el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),nI));
+    const descI=el('input',{class:'inp',placeholder:'e.g., Lot release, post-conjugation QC…',value:scanDescription});
+    descI.addEventListener('input',e=>scanDescription=e.target.value);
+    body.appendChild(el('div',{class:'frow'},
+      el('div',{class:'field'},el('label',{class:'lbl'},'Description'),descI),
+      el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),nI)
+    ));
 
     foot.appendChild(el('button',{class:'btn btn-ghost',onClick:()=>setState({modal:null})},'Cancel'));
     foot.appendChild(el('button',{
@@ -3906,7 +4140,7 @@ function buildPasteModal(){
         const corr=parsedData.map(p=>({wl:p.wl,ab:p.ab*df}));
         const anC=Analytics.analyze(corr,lot.size,lot.od);
         const existingScans2=DB.getScans(lot.id);
-        DB.addScan(lot.id,{id:uid(),scanLabel:genScanLabel(existingScans2),date:scanDate,op:scanOp,dil:df,notes:scanNotes,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()});
+        DB.addScan(lot.id,{id:uid(),scanLabel:genScanLabel(existingScans2),date:scanDate,op:scanOp,dil:df,notes:scanNotes,description:scanDescription,scanType,diluent:scanDiluent,measureMode:scanMeasureMode,sampleVolume:scanVolume,raw:parsedData,an:anM,anC:anC,created:Date.now()});
         setState({modal:null});
       }
     },'Save Scan'));
@@ -3933,7 +4167,7 @@ function buildEditScanModal(){
   if(!lot||!scan)return el('div',{});
   const f={
     date:scan.date||'',op:scan.op||'',dil:String(scan.dil||1),
-    notes:scan.notes||'',scanType:scan.scanType||'stability',
+    notes:scan.notes||'',description:scan.description||'',scanType:scan.scanType||'stability',
     diluent:scan.diluent||'',measureMode:scan.measureMode||'pedestal',
     sampleVolume:scan.sampleVolume||'2'
   };
@@ -4019,13 +4253,18 @@ function buildEditScanModal(){
     ));
     body.appendChild(conjBox);
   }
+  const descInp=el('input',{class:'inp',placeholder:'e.g., Lot release, post-conjugation QC…',value:f.description||''});
+  descInp.addEventListener('input',e=>f.description=e.target.value);
   const ta=el('textarea',{class:'inp',placeholder:'Notes…',style:{minHeight:'70px'}});
   ta.value=f.notes;ta.addEventListener('input',e=>f.notes=e.target.value);
-  body.appendChild(el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),ta));
+  body.appendChild(el('div',{class:'frow'},
+    el('div',{class:'field'},el('label',{class:'lbl'},'Description'),descInp),
+    el('div',{class:'field',style:{marginBottom:'0'}},el('label',{class:'lbl'},'Notes'),ta)
+  ));
   const foot=el('div',{class:'modal-foot'},
     el('button',{class:'btn btn-ghost',onClick:()=>setState({modal:null,editScan:null})},'Cancel'),
     el('button',{class:'btn btn-primary',onClick:()=>{
-      const update={date:f.date,op:f.op,dil:Number(f.dil)||1,notes:f.notes,scanType:f.scanType,diluent:f.diluent,measureMode:f.measureMode,sampleVolume:f.sampleVolume};
+      const update={date:f.date,op:f.op,dil:Number(f.dil)||1,notes:f.notes,description:f.description||'',scanType:f.scanType,diluent:f.diluent,measureMode:f.measureMode,sampleVolume:f.sampleVolume};
       // If post-conj, update or create conjugate fields
       if(f.scanType==='post-conjugation'){
         const existingConj=scan.conj||{};
