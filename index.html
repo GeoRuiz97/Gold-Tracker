@@ -558,7 +558,7 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.5}
   background:transparent;border:1px solid transparent;
   transition:opacity 0.14s;
 }
-svg.chart{width:100%;display:block}
+svg.chart{width:100%;display:block;overflow:visible}
 
 /* ─── SECTION RULE ─── */
 .srule{
@@ -989,6 +989,34 @@ body.light .conj-box{border-color:rgba(42,127,192,0.3);background:rgba(42,127,19
 .scan-filter-clear{font-size:11px;color:var(--text-3);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:3px;font-family:var(--mono);}
 .scan-filter-clear:hover{color:var(--red);}
 
+/* ── Expandable scan detail row ── */
+.scan-expand-row td{
+  padding:0!important;
+  border-bottom:1px solid var(--border);
+}
+.scan-expand-inner{
+  display:grid;
+  grid-template-columns:repeat(9,auto);
+  justify-content:start;
+  gap:10px 28px;
+  padding:14px 20px 16px 52px;
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  animation:expandFadeIn 0.18s ease;
+}
+@keyframes expandFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.scan-expand-field{}
+.scan-expand-k{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;}
+.scan-expand-v{font-size:12px;font-family:var(--mono);color:var(--text);}
+.scan-expand-conj{
+  grid-column:1/-1;
+  background:rgba(74,159,224,0.06);border:1px solid rgba(74,159,224,0.2);
+  border-radius:var(--radius);padding:10px 14px;
+  display:flex;gap:16px;flex-wrap:wrap;align-items:center;
+}
+.scan-expand-conj-title{font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:0.1em;font-weight:600;margin-bottom:6px;}
+/* ── Conjugation efficiency panel ── */
+
 </style>
 </head>
 <body>
@@ -1089,7 +1117,8 @@ const Analytics={
     if(!coaOd||coaOd<=0)return null;
     return Math.round(((maxAb-coaOd)/coaOd)*10000)/100; // 2 decimal places
   },
-  // QC status — now uses 4 signals: drift, FWHM, P:T drop, tail elevation
+  // QC status — primary signals per nanoComposix: OD Ratio 550:700 + Tail elevation.
+  // Secondary: peak drift, FWHM broadening. P:T kept for display but not driving status.
   qcStatus(scans,coaOd){
     const cfg=CFG.get();
     if(!scans||scans.length<2)return{status:"No Data",color:"var(--text-3)"};
@@ -1108,19 +1137,57 @@ const Analytics={
     const drift=Math.abs(peaks[peaks.length-1]-peaks[0]);
     const fwhms=scans.map(s=>an(s)&&an(s).fwhm).filter(f=>f!=null);
     const broad=fwhms.length>=2?fwhms[fwhms.length-1]-fwhms[0]:0;
-    // Peak-to-trough: drop > threshold is a warning sign
-    const pts=scans.map(s=>an(s)&&an(s).peakTrough).filter(x=>x!=null);
-    const ptDrop=pts.length>=2?pts[0]-pts[pts.length-1]:0; // drop from first to last
-    // Tail: elevation from first to last scan
+    // PRIMARY METRIC 1 — OD Ratio 550:700 drop (nanoComposix preferred for 40/80nm gold)
+    // A falling ratio means 700nm is rising relative to 550nm = growing aggregate population
+    const ratios=scans.map(s=>an(s)&&an(s).odRatio).filter(x=>x!=null);
+    const ratioDrop=ratios.length>=2?ratios[0]-ratios[ratios.length-1]:0; // positive = ratio fell = bad
+    // PRIMARY METRIC 2 — Tail (OD at long wavelength) elevation
     const tails=scans.map(s=>an(s)&&an(s).tail).filter(x=>x!=null);
     const tailRise=tails.length>=2?tails[tails.length-1]-tails[0]:0;
-    // Aggregating if any danger threshold exceeded
-    const agg=drift>cfg.driftDanger||broad>cfg.fwhmDanger||ptDrop>cfg.ptDropDanger||tailRise>cfg.tailRiseDanger;
-    // Drifting if any warn threshold exceeded
-    const warn=drift>cfg.driftWarn||broad>cfg.fwhmWarn||ptDrop>cfg.ptDropWarn||tailRise>cfg.tailRiseWarn;
-    if(agg)return{status:"Aggregating",color:"var(--red)",drift,broad,ptDrop,tailRise};
-    if(warn)return{status:"Drifting",color:"var(--amber)",drift,broad,ptDrop,tailRise};
-    return{status:"Stable",color:"var(--green)",drift,broad,ptDrop,tailRise};
+    // ── Composite scoring ────────────────────────────────────────────────────
+    // Primary signals (OD ratio drop + tail rise) carry more weight.
+    // A single primary danger alone → Aggregating. Secondary signals need corroboration.
+    const dangerSignals=[
+      ratioDrop>cfg.ratioDropDanger,   // PRIMARY
+      tailRise>cfg.tailRiseDanger,     // PRIMARY
+      drift>cfg.driftDanger,           // secondary
+      broad>cfg.fwhmDanger,            // secondary
+    ];
+    const warnSignals=[
+      ratioDrop>cfg.ratioDropWarn,
+      tailRise>cfg.tailRiseWarn,
+      drift>cfg.driftWarn,
+      broad>cfg.fwhmWarn,
+    ];
+    const dangerCount=dangerSignals.filter(Boolean).length;
+    const warnCount=warnSignals.filter(Boolean).length;
+    // A single primary danger (signals[0] or [1]) is sufficient for Aggregating
+    const primaryDanger=dangerSignals[0]||dangerSignals[1];
+    const agg=primaryDanger||(dangerCount>=2)||(dangerCount>=1&&warnCount>=2);
+    const warn=warnCount>=1;
+    if(agg)return{status:"Aggregating",color:"var(--red)",drift,broad,tailRise,ratioDrop,dangerCount,warnCount};
+    if(warn)return{status:"Drifting",color:"var(--amber)",drift,broad,tailRise,ratioDrop,dangerCount,warnCount};
+    return{status:"Stable",color:"var(--green)",drift,broad,tailRise,ratioDrop,dangerCount,warnCount};
+  },
+  // OD ratio 550nm : 700nm — nanoComposix preferred primary metric for 40nm & 80nm gold.
+  // Stable 80nm gold conjugate benchmark: ~5.32; unstable: ~2.43.
+  // A declining ratio over time signals growing aggregate population absorbing at 700nm.
+  computeOdRatio(data){
+    if(!data||!data.length)return null;
+    const sorted=data.slice().sort((a,b)=>a.wl-b.wl);
+    function interp(target){
+      for(let i=0;i<sorted.length-1;i++){
+        if(sorted[i].wl<=target&&sorted[i+1].wl>=target){
+          const f=(target-sorted[i].wl)/(sorted[i+1].wl-sorted[i].wl);
+          return sorted[i].ab+f*(sorted[i+1].ab-sorted[i].ab);
+        }
+      }
+      return null;
+    }
+    const ab550=interp(550);
+    const ab700=interp(700);
+    if(ab550==null||ab700==null||ab700<=0)return null;
+    return Math.round((ab550/ab700)*100)/100;
   },
   analyze(rawData,particleSize,coaOd){
     const peak=this.findPeak(rawData);
@@ -1129,10 +1196,11 @@ const Analytics={
     const peakTrough=this.computePeakTrough(rawData,peak.absorbance);
     const tail=this.computeTail(rawData);
     const protein280=this.computeProtein280(rawData);
+    const odRatio=this.computeOdRatio(rawData);
     const odPctChange=coaOd?this.computeOdPctChange(peak.absorbance,coaOd):null;
     const th=THEORETICAL_PEAKS[particleSize]||530;
     const shift=Math.round(((peak.wavelength-th)/th)*10000)/100;
-    return{peakWl:peak.wavelength,maxAb:peak.absorbance,fwhm,auc,shift,th,peakTrough,tail,protein280,odPctChange};
+    return{peakWl:peak.wavelength,maxAb:peak.absorbance,fwhm,auc,shift,th,peakTrough,tail,protein280,odPctChange,odRatio};
   }
 };
 
@@ -1375,8 +1443,9 @@ const SETTINGS_DEFAULTS={
   driftDanger:5,      // nm — peak drift before "Aggregating"
   fwhmWarn:8,         // nm — FWHM broadening before "Drifting"
   fwhmDanger:15,      // nm — FWHM broadening before "Aggregating"
-  ptDropWarn:0.5,     // Peak-to-trough ratio drop before "Drifting"
-  ptDropDanger:1.0,   // Peak-to-trough ratio drop before "Aggregating"
+  // PRIMARY METRICS — nanoComposix preferred for 40nm & 80nm gold
+  ratioDropWarn:0.5,  // Drop in OD 550:700 ratio before "Drifting"   (stable ~5.3, unstable ~2.4)
+  ratioDropDanger:1.5,// Drop in OD 550:700 ratio before "Aggregating"
   tailRiseWarn:0.005, // Long-wavelength tail rise (AU) before "Drifting"
   tailRiseDanger:0.02,// Long-wavelength tail rise (AU) before "Aggregating"
   expiryWarnDays:90,  // days before expiry to show warning
@@ -1470,10 +1539,10 @@ function mkStatusBadge(qc){
       rows.push({label:'FWHM broadening',val:qc.broad.toFixed(2)+' nm',status:danger?'danger':warn?'warn':'ok',
         detail:danger?'Exceeds danger threshold ('+cfg.fwhmDanger+' nm)':warn?'Exceeds warning threshold ('+cfg.fwhmWarn+' nm)':'Within tolerance (threshold: '+cfg.fwhmWarn+' nm)'});
     }
-    if(qc.ptDrop!=null){
-      const danger=qc.ptDrop>cfg.ptDropDanger,warn=qc.ptDrop>cfg.ptDropWarn;
-      rows.push({label:'P:T drop',val:qc.ptDrop.toFixed(3),status:danger?'danger':warn?'warn':'ok',
-        detail:danger?'Exceeds danger threshold ('+cfg.ptDropDanger+')':warn?'Exceeds warning threshold ('+cfg.ptDropWarn+')':'Within tolerance (threshold: '+cfg.ptDropWarn+')'});
+    if(qc.ratioDrop!=null){
+      const danger=qc.ratioDrop>cfg.ratioDropDanger,warn=qc.ratioDrop>cfg.ratioDropWarn;
+      rows.push({label:'OD 550:700 drop',val:qc.ratioDrop.toFixed(3),status:danger?'danger':warn?'warn':'ok',
+        detail:danger?'Exceeds danger threshold ('+cfg.ratioDropDanger+')':warn?'Exceeds warning threshold ('+cfg.ratioDropWarn+')':'Within tolerance (threshold: '+cfg.ratioDropWarn+')'});
     }
     if(qc.tailRise!=null){
       const danger=qc.tailRise>cfg.tailRiseDanger,warn=qc.tailRise>cfg.tailRiseWarn;
@@ -1527,15 +1596,46 @@ const S={view:'dashboard',lot:null,modal:null,search:'',compare:[],compareSearch
 function setState(p){Object.assign(S,p);render();}
 
 function getAn(scan,coaOd){
-  // Backward compatible: compute corrected analysis on-the-fly if missing
   if(!scan) return null;
   if(S.absMode==='corrected'){
-    if(scan.anC) return scan.anC;
-    const d=(scan.raw||[]).map(p=>({wl:p.wl,ab:p.ab*(Number(scan.dil)||1)}));
+    const df=Number(scan.dil)||1;
+    // Detect stale anC: if dil>1 but anC.maxAb is suspiciously close to an.maxAb,
+    // the correction was never applied (scan was saved before dil was set, or dil was
+    // edited after the fact without recomputing). Recompute and cache in-memory.
+    if(scan.anC && df>1 && scan.an && scan.anC.maxAb!=null && scan.an.maxAb!=null){
+      const ratio = scan.anC.maxAb / scan.an.maxAb;
+      if(ratio < 1.5){
+        // anC should be ~df× higher than an — if it's not, it's stale
+        const d=(scan.raw||[]).map(p=>({wl:p.wl,ab:p.ab*df}));
+        scan.anC=Analytics.analyze(d,(scan._lotSize||0)||0,coaOd);
+      }
+    }
+    if(scan.anC) {
+      if(scan.anC.odRatio==null&&scan.raw) scan.anC.odRatio=Analytics.computeOdRatio(scan.raw.map(p=>({wl:p.wl,ab:p.ab*df})));
+      return scan.anC;
+    }
+    const d=(scan.raw||[]).map(p=>({wl:p.wl,ab:p.ab*df}));
     scan.anC=Analytics.analyze(d,(scan._lotSize||0)||0,coaOd);
     return scan.anC;
   }
-  return scan.an||null;
+  if(scan.an) {
+    if(scan.an.odRatio==null&&scan.raw) scan.an.odRatio=Analytics.computeOdRatio(scan.raw);
+    return scan.an;
+  }
+  return null;
+}
+// Always returns dilution-corrected analysis regardless of the global absMode toggle.
+// Used for absolute AU columns in the scan table (Abs max, ΔOD%) so a 10× diluted
+// scan always shows its true particle OD, not the raw instrument reading.
+function getAnCorrected(scan,coaOd){
+  if(!scan) return null;
+  if(scan.anC){
+    if(scan.anC.odRatio==null&&scan.raw) scan.anC.odRatio=Analytics.computeOdRatio(scan.raw.map(p=>({wl:p.wl,ab:p.ab*(Number(scan.dil)||1)})));
+    return scan.anC;
+  }
+  const d=(scan.raw||[]).map(p=>({wl:p.wl,ab:p.ab*(Number(scan.dil)||1)}));
+  scan.anC=Analytics.analyze(d,(scan._lotSize||0)||0,coaOd);
+  return scan.anC;
 }
 function getRaw(scan){
   if(!scan) return [];
@@ -1543,13 +1643,20 @@ function getRaw(scan){
     const df=Number(scan.dil)||1;
     return (scan.raw||[]).map(p=>({wl:p.wl,ab:p.ab*df}));
   }
+  if(S.absMode==='normalized'){
+    // Return raw measured data — normalization is applied AFTER smoothing
+    // inside buildSpectrumChart, so the smoothed peak tip lands exactly at 1.0.
+    // (Pre-normalizing here then smoothing would blur the peak below 1.0.)
+    return scan.raw||[];
+  }
   return scan.raw||[];
 }
 function buildAbsToggle(){
   const mk=(mode,label)=>el('button',{class:'chip'+(S.absMode===mode?' on':''),onClick:()=>setState({absMode:mode})},label);
   return el('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap'}},
     mk('measured','Measured Abs'),
-    mk('corrected','Dilution-corrected Abs')
+    mk('corrected','Dilution-corrected Abs'),
+    mk('normalized','Normalized Spectra')
   );
 }
 
@@ -1685,7 +1792,7 @@ function buildDash(){
   // Build expiry alerts
   const alertNodes=[];
   const expired=sums.filter(l=>expiryInfo(l.expires).status==='expired');
-  const expiringSoon=sums.filter(l=>expiryInfo(l.expires).status==='soon');
+  const expiringSoon=sums.filter(l=>{const info=expiryInfo(l.expires);return info.status!=='expired'&&info.days!=null&&info.days<=14;});
   if(expired.length){
     alertNodes.push(el('div',{class:'alert-bar danger'},
       el('div',{class:'alert-bar-stripe'}),
@@ -1699,7 +1806,7 @@ function buildDash(){
     alertNodes.push(el('div',{class:'alert-bar warn'},
       el('div',{class:'alert-bar-stripe'}),
       el('div',{class:'alert-bar-body'},
-        el('div',{class:'alert-bar-title'},'🕐 '+expiringSoon.length+' lot'+(expiringSoon.length>1?'s':'')+' expiring soon'),
+        el('div',{class:'alert-bar-title'},'🕐 '+expiringSoon.length+' lot'+(expiringSoon.length>1?'s':'')+' expiring within 14 days'),
         el('div',{class:'alert-bar-sub'},expiringSoon.map(l=>l.lotNumber+' ('+expiryInfo(l.expires).label+')').join(' · '))
       )
     ));
@@ -1774,36 +1881,22 @@ function buildDetail(){
   scans.forEach(s=>{s._lotSize=lot.size;});
   const qc=Analytics.qcStatus(scans,lot.od);
   const last=scans[scans.length-1];
-  const aLast=last?getAn(last,lot.od):null;
   const th=THEORETICAL_PEAKS[lot.size]||530;
 
   function exportCSV(){
     let csv='Date,Operator,ScanType,Diluent,Dilution,Peak_nm,MaxAbs_measured_AU,MaxAbs_corrected_AU,OD_pct_change,FWHM_nm,AUC_measured,AUC_corrected,PeakTrough,Tail_700-900nm,Protein280nm,Shift_pct\n';
     scans.forEach(s=>{
       const am=s.an||{};const ac=s.anC||{};
-      csv+=`${s.date},${s.op||''},${s.scanType||'stability'},${s.diluent||''},${s.dil},${am.peakWl||''},${am.maxAb||''},${ac.maxAb||''},${am.odPctChange!=null?am.odPctChange:''},${am.fwhm||''},${am.auc||''},${ac.auc||''},${am.peakTrough||''},${am.tail||''},${am.protein280||''},${am.shift||''}\n`;
+      csv+=`${s.date},${s.op||''},${s.scanType||'stability'},${s.diluent||''},${s.dil},${am.peakWl||''},${am.maxAb||''},${ac.maxAb||''},${ac.odPctChange!=null?ac.odPctChange:''},${am.fwhm||''},${am.auc||''},${ac.auc||''},${am.peakTrough||''},${am.tail||''},${am.protein280||''},${am.shift||''}\n`;
     });
     const b=new Blob([csv],{type:'text/csv'});const u=URL.createObjectURL(b);
     const a=document.createElement('a');a.href=u;a.download=lot.lotNumber+'_qc.csv';a.click();URL.revokeObjectURL(u);
   }
 
-  // ── KPI bar ──────────────────────────────────────────────────────────────
   function odPctColor(v){if(v==null)return'var(--text-2)';const a=Math.abs(v);return a>20?'var(--red)':a>10?'var(--amber)':'var(--green)';}
-  function ptColor(v){if(!v)return'var(--text-2)';return v>=2.5?'var(--green)':v>=1.5?'var(--amber)':'var(--red)';}
+  function ratioColor(v){if(v==null)return'var(--text-2)';return v>=4?'var(--green)':v>=2.5?'var(--amber)':'var(--red)';}
   function tailColor(v){if(v==null)return'var(--text-2)';return v<0.01?'var(--green)':v<0.03?'var(--amber)':'var(--red)';}
-  function p280Color(v){if(v==null)return'var(--text-2)';return v>0.1?'var(--blue)':'var(--text-2)';}
-
-  const kpis=last&&aLast?[
-    {v:aLast.peakWl+' nm',k:'λ max',c:'var(--gold)',tt:'SPR peak wavelength'},
-    {v:aLast.maxAb+' AU',k:'Abs max (OD)',c:'var(--blue)',tt:'Maximum absorbance (peak OD)'},
-    {v:aLast.odPctChange!=null?(aLast.odPctChange>0?'+':'')+aLast.odPctChange+'%':'—',k:'ΔOD vs CoA',c:odPctColor(aLast.odPctChange),tt:'% change in peak OD vs starting material on CoA'},
-    {v:aLast.fwhm?aLast.fwhm+' nm':'—',k:'FWHM',c:'var(--purple)',tt:'Full-width half-maximum — broadening indicates aggregation'},
-    {v:aLast.peakTrough?aLast.peakTrough.toFixed(2):'—',k:'Peak:Trough',c:ptColor(aLast.peakTrough),tt:'SPR peak / abs@480nm — drops with aggregation (gold standard: ≥2.5)'},
-    {v:aLast.tail!=null?aLast.tail.toFixed(4)+' AU':'—',k:'700–900nm Tail',c:tailColor(aLast.tail),tt:'Mean absorbance 700–900nm — elevated baseline = aggregate scatter'},
-    {v:aLast.protein280!=null?aLast.protein280.toFixed(4)+' AU':'—',k:'280nm Protein',c:p280Color(aLast.protein280),tt:'Abs @ 280nm — peak indicates free protein in conjugate buffer'},
-    {v:qc.drift!=null?qc.drift.toFixed(1)+' nm':'—',k:'Peak drift',c:qc.color,tt:'Total peak shift across all scans'},
-    {v:scans.length,k:'Scans',c:'var(--text-2)',tt:'Total QC checks recorded'},
-  ]:[];
+  function ptColor(v){if(!v)return'var(--text-2)';return v>=2.5?'var(--green)':v>=1.5?'var(--amber)':'var(--red)';}
 
   // ── Scan history filters ─────────────────────────────────────────────────
   const scanFilters = S.scanFilters && S.scanFilters[lot.id] ? S.scanFilters[lot.id] : {};
@@ -1860,14 +1953,20 @@ function buildDetail(){
   const visibleScans = scans.filter(s => selScanIds.has(s.id));
 
   const scanRows=el('tbody',{});
+  // Track which rows are expanded in local state
+  if(!S.expandedScans) S.expandedScans={};
+  const expandedScans = S.expandedScans;
+
   filteredScans.forEach(s=>{
     const a=getAn(s,lot.od)||{};
-    const shColor=Math.abs(a.shift||0)>1?'var(--amber)':'var(--green)';
-    const ptC=ptColor(a.peakTrough);
-    const tailC=tailColor(a.tail);
-    const odC=odPctColor(a.odPctChange);
+    const isDiluted=(Number(s.dil)||1)>1;
+    const isStability=s.scanType==='stability'||(s.scanType==null||s.scanType==='');
+    const showOdPct=(isStability&&!isDiluted)||(S.absMode==='corrected'&&isStability);
+    const odC=showOdPct?odPctColor(a.odPctChange):'var(--text-3)';
     const checked = selScanIds.has(s.id);
     const scanColor = SCAN_COLORS[scans.indexOf(s) % SCAN_COLORS.length];
+    const isExpanded = !!expandedScans[s.id];
+
     const stBadge=s.scanType==='post-conjugation'?el('span',{class:'badge',style:{color:'var(--blue)',background:'rgba(74,159,224,0.12)',border:'1px solid rgba(74,159,224,0.25)',fontSize:'10px'}},'post-conj'):
                   s.scanType==='pre-conjugation'?el('span',{class:'badge',style:{color:'var(--purple)',background:'rgba(155,111,224,0.12)',border:'1px solid rgba(155,111,224,0.25)',fontSize:'10px'}},'pre-conj'):
                   el('span',{class:'badge',style:{color:'var(--text-3)',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',fontSize:'10px'}},'stability');
@@ -1877,8 +1976,14 @@ function buildDetail(){
     cb.checked = checked;
     cb.addEventListener('change', () => toggleScan(s.id));
     cbWrap.appendChild(cb);
-    scanRows.appendChild(el('tr',{},
+
+    // Expand toggle cell
+    const expandBtn = el('td',{style:{width:'24px',paddingLeft:'4px',paddingRight:'4px',cursor:'pointer',userSelect:'none',color:isExpanded?'var(--gold)':'var(--text-3)',fontSize:'10px',fontFamily:'var(--mono)',transition:'color 0.13s'}},isExpanded?'▼':'▶');
+    expandBtn.title = isExpanded ? 'Collapse details' : 'Expand details';
+
+    const mainRow = el('tr',{style:{cursor:'pointer',borderBottom:isExpanded?'none':''}},
       cbWrap,
+      expandBtn,
       el('td',{style:{fontFamily:'var(--mono)',fontSize:'12px'}},fmtDate(s.date)),
       el('td',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:scanColor,letterSpacing:'0.04em',whiteSpace:'nowrap'}},s.scanLabel||'—'),
       el('td',{style:{fontSize:'12px',color:'var(--text)',maxWidth:'180px',whiteSpace:'normal',wordBreak:'break-word',lineHeight:'1.4'}},s.description||'—'),
@@ -1893,22 +1998,78 @@ function buildDetail(){
           },'🔗 '+s.conj.id.slice(0,22)+(s.conj.id.length>22?'…':'')):null
         )
       ),
-      el('td',{style:{fontSize:'12px',color:'var(--text-2)'}},s.diluent||'—'),
       el('td',{style:{fontFamily:'var(--mono)'}},s.dil+'×'),
       el('td',{style:{fontFamily:'var(--mono)',color:'var(--gold)',fontWeight:'500'}},a.peakWl||'—'),
       el('td',{style:{fontFamily:'var(--mono)'}},a.maxAb||'—'),
-      el('td',{style:{fontFamily:'var(--mono)',color:odC}},a.odPctChange!=null?(a.odPctChange>0?'+':'')+a.odPctChange+'%':'—'),
-      el('td',{style:{fontFamily:'var(--mono)'}},a.fwhm||'—'),
-      el('td',{style:{fontFamily:'var(--mono)',color:ptC,fontWeight:'500'}},a.peakTrough?a.peakTrough.toFixed(2):'—'),
-      el('td',{style:{fontFamily:'var(--mono)',color:tailC}},a.tail!=null?a.tail.toFixed(4):'—'),
-      el('td',{style:{fontFamily:'var(--mono)',color:'var(--blue)',fontSize:'11px'}},a.protein280!=null?a.protein280.toFixed(4):'—'),
-      el('td',{style:{fontFamily:'var(--mono)',color:shColor}},a.shift!=null?(a.shift>0?'+':'')+a.shift+'%':'—'),
+      el('td',{style:{fontFamily:'var(--mono)',color:odC}},showOdPct&&a.odPctChange!=null?(a.odPctChange>0?'+':'')+a.odPctChange+'%':'—'),
       el('td',{style:{fontSize:'11px',color:'var(--text-3)',maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},s.notes||'—'),
       el('td',{style:{whiteSpace:'nowrap'}},
-        el('button',{class:'btn btn-ghost btn-sm',style:{marginRight:'4px'},onClick:()=>setState({modal:'editScan',editScan:{lid:lot.id,sid:s.id}})},'✏'),
-        el('button',{class:'btn btn-del btn-sm',onClick:()=>{if(confirm('Delete this scan?')){DB.deleteScan(lot.id,s.id);render();}}},'✕')
+        el('button',{class:'btn btn-ghost btn-sm',style:{marginRight:'4px'},onClick:e=>{e.stopPropagation();setState({modal:'editScan',editScan:{lid:lot.id,sid:s.id}});}},'\u270F'),
+        el('button',{class:'btn btn-del btn-sm',onClick:e=>{e.stopPropagation();if(confirm('Delete this scan?')){DB.deleteScan(lot.id,s.id);render();}}},'\u2715')
       )
-    ));
+    );
+
+    // Toggle expand on row click (but not on checkbox/buttons)
+    mainRow.addEventListener('click', e => {
+      if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT') return;
+      S.expandedScans = Object.assign({}, expandedScans, {[s.id]: !isExpanded});
+      render();
+    });
+
+    scanRows.appendChild(mainRow);
+
+    // ── Expandable detail row ──────────────────────────────────────────────
+    if(isExpanded){
+      const ptC=ptColor(a.peakTrough);
+      const tailC=tailColor(a.tail);
+      const ratioC=ratioColor(a.odRatio);
+
+      // Build conjugate info block only (conjugation efficiency removed)
+      let conjEffEl = null;
+
+      const detailFields=[
+        {k:'OD 550:700 ratio',v:a.odRatio!=null?a.odRatio.toFixed(2):'—',c:ratioC},
+        {k:'FWHM',v:a.fwhm?a.fwhm+' nm':'—',c:'var(--purple)'},
+        {k:'Peak:Trough (secondary)',v:a.peakTrough?a.peakTrough.toFixed(2):'—',c:ptC},
+        {k:'700–900nm Tail',v:a.tail!=null?a.tail.toFixed(4)+' AU':'—',c:tailC},
+        {k:'280nm Protein',v:a.protein280!=null?a.protein280.toFixed(4)+' AU':'—',c:a.protein280>0.01?'var(--blue)':'var(--text)'},
+        {k:'Δ Theoretical λ',v:a.shift!=null?(a.shift>0?'+':'')+a.shift+'%':'—',c:Math.abs(a.shift||0)>2?'var(--amber)':'var(--text)'},
+        {k:'Measurement mode',v:s.measureMode||'—',c:'var(--text)'},
+        {k:'Sample volume',v:s.sampleVolume?s.sampleVolume+' µL':'—',c:'var(--text)'},
+        {k:'Diluent',v:s.diluent||'—',c:'var(--text)'},
+      ];
+
+      const expandInner = el('div',{class:'scan-expand-inner'});
+      detailFields.forEach(f=>{
+        expandInner.appendChild(el('div',{class:'scan-expand-field'},
+          el('div',{class:'scan-expand-k'},f.k),
+          el('div',{class:'scan-expand-v',style:{color:f.c}},f.v)
+        ));
+      });
+
+      // Conjugate info block
+      if(s.conj){
+        const conjDiv = el('div',{class:'scan-expand-conj'});
+        conjDiv.appendChild(el('div',{style:{width:'100%'}},el('div',{class:'scan-expand-conj-title'},'🔗 Conjugate Record — '+s.conj.id)));
+        const conjFields=[
+          ['Ab Catalog',s.conj.abCatalog||'—'],['Ab Lot',s.conj.abLot||'—'],['Supplier',s.conj.abSupplier||'—'],
+          ['Type',s.conj.conjType||'—'],['Final Conc.',s.conj.conc?(s.conj.conc+' '+s.conj.concUnit):'—']
+        ];
+        conjFields.forEach(([k,v])=>conjDiv.appendChild(el('div',{class:'scan-expand-field'},
+          el('div',{class:'scan-expand-k'},k),el('div',{class:'scan-expand-v'},v)
+        )));
+        expandInner.appendChild(conjDiv);
+      }
+
+      // Conjugation efficiency block (after conj info)
+      if(conjEffEl) expandInner.appendChild(conjEffEl);
+
+      const expandTd = el('td',{colspan:'13'});
+      expandTd.appendChild(expandInner);
+      const expandRow = el('tr',{class:'scan-expand-row'});
+      expandRow.appendChild(expandTd);
+      scanRows.appendChild(expandRow);
+    }
   });
 
   // (longitudinal charts built inline in the return below)
@@ -1924,28 +2085,284 @@ function buildDetail(){
 
   // ── QC interpretation panel ──────────────────────────────────────────────
   function buildQcInterpretation(){
-    if(scans.length<2)return null;
-    const signals=[];
-    if(qc.drift>0)signals.push({label:'Peak drift',val:qc.drift.toFixed(1)+' nm',note:qc.drift>5?'Significant red-shift — possible conjugation or aggregation':qc.drift>3?'Moderate drift — monitor closely':'Within tolerance',c:qc.drift>5?'var(--red)':qc.drift>3?'var(--amber)':'var(--green)'});
-    if(qc.broad>0)signals.push({label:'FWHM broadening',val:qc.broad.toFixed(1)+' nm',note:qc.broad>15?'Peak significantly broadened — strong aggregation indicator':qc.broad>8?'Moderate broadening':'Minimal broadening',c:qc.broad>15?'var(--red)':qc.broad>8?'var(--amber)':'var(--green)'});
-    if(qc.ptDrop>0)signals.push({label:'Peak:Trough drop',val:qc.ptDrop.toFixed(2),note:qc.ptDrop>1?'Significant P:T decline — aggregates absorbing at 480nm':qc.ptDrop>0.5?'Moderate P:T decline':'Stable ratio',c:qc.ptDrop>1?'var(--red)':qc.ptDrop>0.5?'var(--amber)':'var(--green)'});
-    if(qc.tailRise>0)signals.push({label:'Tail elevation',val:qc.tailRise.toFixed(5)+' AU',note:qc.tailRise>0.02?'Elevated long-λ baseline — aggregate scatter present':qc.tailRise>0.005?'Slight tail elevation':'Baseline stable',c:qc.tailRise>0.02?'var(--red)':qc.tailRise>0.005?'var(--amber)':'var(--green)'});
-    if(!signals.length)return null;
+    const activeScans = scans.filter(s => selScanIds.has(s.id));
+
+    // ── Classify selected scans by type ──────────────────────────────────────
+    const pre  = activeScans.filter(s => s.scanType==='pre-conjugation');
+    const post = activeScans.filter(s => s.scanType==='post-conjugation');
+    const stab = activeScans.filter(s => s.scanType==='stability' || !s.scanType);
+    const other = activeScans.filter(s => s.scanType && s.scanType!=='pre-conjugation' && s.scanType!=='post-conjugation' && s.scanType!=='stability');
+
+    // Determine which case we're in
+    const isPrePost   = pre.length===1 && post.length===1 && stab.length===0 && other.length===0;
+    const isPostOnly  = post.length>=2  && pre.length===0  && stab.length===0 && other.length===0;
+    const isStabOnly  = stab.length>=2  && pre.length===0  && post.length===0 && other.length===0;
+    const isPreOnly   = pre.length>=2   && post.length===0 && stab.length===0 && other.length===0;
+
+    if(!isPrePost && !isPostOnly && !isStabOnly && !isPreOnly) return null;
+
+    // ── Shared helpers ────────────────────────────────────────────────────────
+    const cfg = CFG.get();
+    function sigCard(label, val, note, c){
+      return el('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderLeft:'3px solid '+c,borderRadius:'var(--radius)',padding:'12px 14px'}},
+        el('div',{style:{color:'var(--text-3)',fontSize:'10px',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'4px'}},label),
+        el('div',{style:{color:c,fontFamily:'var(--mono)',fontSize:'15px',fontWeight:'600',marginBottom:'4px'}},val),
+        el('div',{style:{color:'var(--text-2)',fontSize:'11px',lineHeight:'1.4'}},note)
+      );
+    }
+    function statusBanner(status, msg){
+      const cfg2 = status==='ok'
+        ? {c:'var(--green)', bg:'rgba(80,200,120,0.08)', bc:'rgba(80,200,120,0.25)', icon:'✅'}
+        : status==='warn'
+        ? {c:'var(--amber)', bg:'rgba(224,148,60,0.08)', bc:'rgba(224,148,60,0.25)', icon:'⚠️'}
+        : {c:'var(--red)',   bg:'rgba(224,92,92,0.08)',  bc:'rgba(224,92,92,0.25)',  icon:'🔴'};
+      return el('div',{style:{background:cfg2.bg,border:'1px solid '+cfg2.bc,borderRadius:'var(--radius)',padding:'10px 14px',marginBottom:'12px',display:'flex',alignItems:'center',gap:'8px'}},
+        el('span',{},cfg2.icon),
+        el('span',{style:{color:cfg2.c,fontFamily:'var(--mono)',fontSize:'12px',fontWeight:'600'}},msg)
+      );
+    }
+
+    let caseLabel='', subtitle='', cards=[], banner=null;
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // CASE 1 — 1 pre-conj + 1 post-conj
+    // ══════════════════════════════════════════════════════════════════════════
+    if(isPrePost){
+      const aPre  = getAnCorrected(pre[0],  lot.od) || {};
+      const aPost = getAnCorrected(post[0], lot.od) || {};
+      caseLabel = 'Conjugation QC';
+      subtitle  = pre[0].scanLabel+' → '+post[0].scanLabel;
+
+      // Peak drift — always shown
+      const drift = aPre.peakWl && aPost.peakWl ? Math.round((aPost.peakWl - aPre.peakWl)*100)/100 : null;
+      const driftAbs = Math.abs(drift||0);
+      const driftC = driftAbs>5?'var(--red)':driftAbs>2?'var(--amber)':'var(--green)';
+      if(drift!==null) cards.push(sigCard(
+        'Peak drift (Δλ max)',
+        (drift>0?'+':'')+drift+' nm',
+        driftAbs>5?'Large red-shift — possible aggregation or incomplete conjugation':
+        driftAbs>2?'Moderate shift — typical for protein conjugation':
+        'Minimal shift — expected for well-conjugated particles',
+        driftC
+      ));
+
+      // FWHM broadening — only if significant
+      const fwhmDelta = aPre.fwhm && aPost.fwhm ? Math.round((aPost.fwhm - aPre.fwhm)*10)/10 : null;
+      if(fwhmDelta!==null && Math.abs(fwhmDelta)>cfg.fwhmWarn) cards.push(sigCard(
+        'FWHM broadening',
+        (fwhmDelta>0?'+':'')+fwhmDelta+' nm',
+        fwhmDelta>cfg.fwhmDanger?'Peak significantly broadened — strong aggregation indicator':
+        'Moderate broadening — monitor for aggregation',
+        fwhmDelta>cfg.fwhmDanger?'var(--red)':'var(--amber)'
+      ));
+
+      // OD 550:700 drop — only if significant
+      const ratioDelta = aPre.odRatio && aPost.odRatio ? Math.round((aPre.odRatio - aPost.odRatio)*1000)/1000 : null;
+      if(ratioDelta!==null && ratioDelta>cfg.ratioDropWarn) cards.push(sigCard(
+        'OD 550:700 drop',
+        '−'+ratioDelta.toFixed(3),
+        ratioDelta>cfg.ratioDropDanger?'Significant ratio decline — aggregate population present':
+        'Ratio declining — small aggregate fraction possible',
+        ratioDelta>cfg.ratioDropDanger?'var(--red)':'var(--amber)'
+      ));
+
+      // Tail rise — only if significant
+      const tailDelta = aPre.tail!=null && aPost.tail!=null ? Math.round((aPost.tail - aPre.tail)*100000)/100000 : null;
+      if(tailDelta!==null && tailDelta>0.005) cards.push(sigCard(
+        'Tail elevation (700–900nm)',
+        (tailDelta>0?'+':'')+tailDelta.toFixed(5)+' AU',
+        tailDelta>0.02?'Elevated long-λ scatter — aggregates present':
+        'Slight tail rise — small aggregate fraction possible',
+        tailDelta>0.02?'var(--red)':'var(--amber)'
+      ));
+
+      // 280nm protein — always shown for pre→post (positive indicator)
+      if(aPost.protein280!=null) cards.push(sigCard(
+        '280nm Protein (post)',
+        aPost.protein280.toFixed(4)+' AU',
+        aPost.protein280>0.05?'Protein signal present — conjugation confirmed':
+        aPost.protein280>0.01?'Weak protein signal — partial conjugation or low Ab loading':
+        'No detectable protein signal — conjugation may have failed',
+        aPost.protein280>0.05?'var(--blue)':aPost.protein280>0.01?'var(--amber)':'var(--red)'
+      ));
+
+      // Overall status
+      const hasRed  = cards.some(c=>c.style&&false) || // check via ratioDelta/tail/fwhm values
+        (driftAbs>5)||(fwhmDelta!=null&&fwhmDelta>cfg.fwhmDanger)||
+        (ratioDelta!=null&&ratioDelta>cfg.ratioDropDanger)||(tailDelta!=null&&tailDelta>0.02)||
+        (aPost.protein280!=null&&aPost.protein280<=0.01);
+      const hasWarn =
+        (driftAbs>2)||(fwhmDelta!=null&&fwhmDelta>cfg.fwhmWarn)||
+        (ratioDelta!=null&&ratioDelta>cfg.ratioDropWarn)||(tailDelta!=null&&tailDelta>0.005)||
+        (aPost.protein280!=null&&aPost.protein280<=0.05&&aPost.protein280>0.01);
+      banner = statusBanner(
+        hasRed?'danger':hasWarn?'warn':'ok',
+        hasRed?'Action required — conjugation may have caused aggregation or failed':
+        hasWarn?'Monitor — some signals warrant attention':
+        'Conjugation looks clean — particles stable, protein signal present'
+      );
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // CASE 2 — 2+ post-conj scans (storage stability)
+    // ══════════════════════════════════════════════════════════════════════════
+    else if(isPostOnly){
+      const anPost = post.map(s=>getAnCorrected(s,lot.od)||{});
+      caseLabel = 'Conjugate Storage Stability';
+      subtitle  = post.length+' post-conjugation scans';
+      const aqc = Analytics.qcStatus(post, lot.od);
+
+      if(aqc.drift>0) cards.push(sigCard('Peak drift',aqc.drift.toFixed(1)+' nm',
+        aqc.drift>5?'Significant drift — conjugate may be aggregating in storage':
+        aqc.drift>2?'Moderate drift — monitor storage conditions':'Stable λ max over time',
+        aqc.drift>5?'var(--red)':aqc.drift>2?'var(--amber)':'var(--green)'
+      ));
+      if(aqc.broad>cfg.fwhmWarn) cards.push(sigCard('FWHM broadening',aqc.broad.toFixed(1)+' nm',
+        aqc.broad>cfg.fwhmDanger?'Peak broadening — significant aggregation in storage':'Moderate broadening — monitor',
+        aqc.broad>cfg.fwhmDanger?'var(--red)':'var(--amber)'
+      ));
+      if(aqc.ratioDrop>cfg.ratioDropWarn) cards.push(sigCard('OD 550:700 drop',aqc.ratioDrop.toFixed(3),
+        aqc.ratioDrop>cfg.ratioDropDanger?'Ratio declining — aggregate population growing':'Early ratio decline',
+        aqc.ratioDrop>cfg.ratioDropDanger?'var(--red)':'var(--amber)'
+      ));
+      if(aqc.tailRise>0.005) cards.push(sigCard('Tail elevation',aqc.tailRise.toFixed(5)+' AU',
+        aqc.tailRise>0.02?'Elevated scatter — aggregates detected in storage':'Slight tail rise',
+        aqc.tailRise>0.02?'var(--red)':'var(--amber)'
+      ));
+
+      const s2 = aqc.status==='Aggregating'?'danger':aqc.status==='Drifting'?'warn':'ok';
+      banner = statusBanner(s2,
+        s2==='danger'?'Action required — conjugate showing signs of aggregation in storage':
+        s2==='warn'?'Drifting — monitor conjugate storage conditions closely':
+        'Conjugate stable in storage buffer'
+      );
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // CASE 3 — 2+ stability scans (raw stock gold)
+    // ══════════════════════════════════════════════════════════════════════════
+    else if(isStabOnly){
+      caseLabel = 'Stock Stability';
+      subtitle  = stab.length+' stability scans';
+      const aqc = Analytics.qcStatus(stab, lot.od);
+
+      // ΔOD% trend — compare first and last undiluted scans
+      const undiluted = stab.filter(s=>(Number(s.dil)||1)===1);
+      if(undiluted.length>=2){
+        const aFirst = getAnCorrected(undiluted[0], lot.od)||{};
+        const aLast2 = getAnCorrected(undiluted[undiluted.length-1], lot.od)||{};
+        if(aFirst.odPctChange!=null && aLast2.odPctChange!=null){
+          const odDelta = Math.round((aLast2.odPctChange - aFirst.odPctChange)*100)/100;
+          cards.push(sigCard('ΔOD% vs CoA (latest)',
+            (aLast2.odPctChange>0?'+':'')+aLast2.odPctChange+'%',
+            Math.abs(aLast2.odPctChange)>20?'OD significantly outside CoA — lot may be degraded':
+            Math.abs(aLast2.odPctChange)>10?'OD drifting from CoA — monitor concentration':'OD within acceptable range of CoA',
+            Math.abs(aLast2.odPctChange)>20?'var(--red)':Math.abs(aLast2.odPctChange)>10?'var(--amber)':'var(--green)'
+          ));
+        }
+      }
+
+      if(aqc.drift>0) cards.push(sigCard('Peak drift',aqc.drift.toFixed(1)+' nm',
+        aqc.drift>5?'Significant red-shift — aggregation likely':
+        aqc.drift>3?'Moderate drift — monitor':'Stable λ max',
+        aqc.drift>5?'var(--red)':aqc.drift>3?'var(--amber)':'var(--green)'
+      ));
+      if(aqc.ratioDrop>cfg.ratioDropWarn) cards.push(sigCard('OD 550:700 drop',aqc.ratioDrop.toFixed(3),
+        aqc.ratioDrop>cfg.ratioDropDanger?'Primary signal — significant ratio decline indicating aggregation':'Early ratio decline — watch closely',
+        aqc.ratioDrop>cfg.ratioDropDanger?'var(--red)':'var(--amber)'
+      ));
+      if(aqc.tailRise>0.005) cards.push(sigCard('Tail elevation',aqc.tailRise.toFixed(5)+' AU',
+        aqc.tailRise>0.02?'Elevated long-λ scatter — aggregate population present':'Slight tail rise',
+        aqc.tailRise>0.02?'var(--red)':'var(--amber)'
+      ));
+      if(aqc.broad>cfg.fwhmWarn) cards.push(sigCard('FWHM broadening',aqc.broad.toFixed(1)+' nm',
+        aqc.broad>cfg.fwhmDanger?'Peak significantly broadened':'Moderate broadening',
+        aqc.broad>cfg.fwhmDanger?'var(--red)':'var(--amber)'
+      ));
+
+      const s3 = aqc.status==='Aggregating'?'danger':aqc.status==='Drifting'?'warn':'ok';
+      banner = statusBanner(s3,
+        s3==='danger'?'Action required — stock gold showing aggregation':
+        s3==='warn'?'Drifting — stock may be degrading, check storage conditions':
+        'Stock gold stable — all signals within tolerance'
+      );
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // CASE 4 — 2+ pre-conj scans (batch consistency)
+    // ══════════════════════════════════════════════════════════════════════════
+    else if(isPreOnly){
+      caseLabel = 'Pre-Conjugation Batch Consistency';
+      subtitle  = pre.length+' pre-conjugation preparations';
+      const anPre = pre.map(s=>getAnCorrected(s,lot.od)||{});
+
+      // CV% of λmax
+      const wls = anPre.map(a=>a.peakWl).filter(Boolean);
+      if(wls.length>=2){
+        const mean = wls.reduce((a,b)=>a+b,0)/wls.length;
+        const cv = Math.round(Math.sqrt(wls.map(v=>(v-mean)**2).reduce((a,b)=>a+b,0)/wls.length)/mean*10000)/100;
+        cards.push(sigCard('λ max CV%', cv+'%',
+          cv>1?'High variability across preps — batches may not be consistent':
+          cv>0.3?'Moderate variability — acceptable for most assays':'Excellent λ max consistency across preps',
+          cv>1?'var(--red)':cv>0.3?'var(--amber)':'var(--green)'
+        ));
+      }
+
+      // CV% of OD
+      const ods = anPre.map(a=>a.maxAb).filter(Boolean);
+      if(ods.length>=2){
+        const mean = ods.reduce((a,b)=>a+b,0)/ods.length;
+        const cv = Math.round(Math.sqrt(ods.map(v=>(v-mean)**2).reduce((a,b)=>a+b,0)/ods.length)/mean*10000)/100;
+        cards.push(sigCard('OD CV%', cv+'%',
+          cv>10?'High OD variability — check dilution preparation consistency':
+          cv>5?'Moderate OD variability':'Consistent OD across preps',
+          cv>10?'var(--red)':cv>5?'var(--amber)':'var(--green)'
+        ));
+      }
+
+      // OD 550:700 range — any outlier prep?
+      const ratios = anPre.map(a=>a.odRatio).filter(v=>v!=null);
+      if(ratios.length>=2){
+        const minR=Math.min(...ratios), maxR=Math.max(...ratios);
+        const hasOutlier = ratios.some(r=>r<2.5);
+        cards.push(sigCard('OD 550:700 range',
+          minR.toFixed(2)+' – '+maxR.toFixed(2),
+          hasOutlier?'At least one prep has a low ratio — possible aggregation before conjugation':
+          (maxR-minR)>1?'Some variation across preps':'All preps show consistent OD ratio',
+          hasOutlier?'var(--red)':(maxR-minR)>1?'var(--amber)':'var(--green)'
+        ));
+      }
+
+      const hasRed4  = cards.some(()=>false)||(wls.length>=2&&Math.sqrt(wls.map(v=>{const m=wls.reduce((a,b)=>a+b,0)/wls.length;return(v-m)**2;}).reduce((a,b)=>a+b,0)/wls.length)/(wls.reduce((a,b)=>a+b,0)/wls.length)*100>1)||(ratios.some(r=>r<2.5));
+      const hasWarn4 = !hasRed4 && (ods.length>=2&&Math.sqrt(ods.map(v=>{const m=ods.reduce((a,b)=>a+b,0)/ods.length;return(v-m)**2;}).reduce((a,b)=>a+b,0)/ods.length)/(ods.reduce((a,b)=>a+b,0)/ods.length)*100>5);
+      banner = statusBanner(
+        hasRed4?'danger':hasWarn4?'warn':'ok',
+        hasRed4?'Action required — batch inconsistency detected, review prep before conjugating':
+        hasWarn4?'Some variability across preps — acceptable but worth noting':
+        'All preps look consistent — good to proceed with conjugation'
+      );
+    }
+
     return el('div',{class:'pnl'},
-      el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},'QC Signal Interpretation'),el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'\u00A0·\u00A0Based on nanoComposix UV-Vis guidelines')),
-      el('div',{class:'pnl-body'},
-        el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'10px'}},
-          ...signals.map(s=>el('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px'}},
-            el('div',{style:{color:'var(--text-3)',fontSize:'11px',marginBottom:'4px'}},s.label),
-            el('div',{style:{color:s.c,fontFamily:'var(--mono)',fontSize:'16px',fontWeight:'600',marginBottom:'4px'}},s.val),
-            el('div',{style:{color:'var(--text-2)',fontSize:'11px',lineHeight:'1.4'}},s.note)
-          ))
+      el('div',{class:'pnl-head'},
+        el('span',{class:'pnl-title'},'QC Signal Interpretation'),
+        el('div',{style:{display:'flex',alignItems:'center',gap:'8px'}},
+          el('span',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)'}},'[ '+caseLabel+' ]'),
+          el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'·'),
+          el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},subtitle)
         )
+      ),
+      el('div',{class:'pnl-body'},
+        banner,
+        cards.length
+          ? el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'10px'}},
+              ...cards)
+          : el('div',{style:{color:'var(--text-3)',fontSize:'12px',fontFamily:'var(--mono)',padding:'4px 0'}},'No anomalous signals detected.')
       )
     );
   }
 
-  return el('div',{class:'page'},
+    return el('div',{class:'page'},
     el('div',{class:'back-row no-print'},
       el('div',{class:'back-info'},
         el('button',{class:'btn btn-ghost btn-sm',onClick:()=>setState({view:'dashboard'})},'← Back'),
@@ -1980,34 +2397,48 @@ function buildDetail(){
       )
     ),
 
-    el('div',{class:'no-print pnl',style:{marginTop:'0'}},
-      el('div',{class:'pnl-body',style:{paddingTop:'10px',paddingBottom:'10px',display:'flex',alignItems:'center',gap:'12px',flexWrap:'wrap'}},
-        el('span',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.08em',flexShrink:'0'}},'Absorbance view'),
-        el('div',{style:{width:'1px',height:'18px',background:'var(--border)',flexShrink:'0'}}),
-        buildAbsToggle(),
-        S.absMode==='corrected'?el('span',{style:{fontSize:'11px',color:'var(--amber)',background:'rgba(224,148,60,0.12)',border:'1px solid rgba(224,148,60,0.3)',borderRadius:'4px',padding:'2px 8px',fontFamily:'var(--mono)'}},'⚡ All absorbance values multiplied by dilution factor — true particle OD shown'):
-          el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'Raw measured values as-is from instrument')
-      )
-    ),
-
-    kpis.length?el('div',{class:'stats','style':'flex-wrap:wrap;'},
-      ...kpis.map(m=>el('div',{class:'stat',style:{color:m.c},title:m.tt||''},el('div',{class:'stat-val',style:{fontSize:'17px'}},m.v),el('div',{class:'stat-lbl'},m.k)))
-    ):'',
-
     buildQcInterpretation(),
-    scans.length?buildSpectrumChart(visibleScans.length ? visibleScans : scans,'UV-Vis Absorbance Overlay'+(S.absMode==='corrected'?' — Dilution-Corrected':''),false):'',
+    scans.length?(()=>{
+      const modeHint = S.absMode==='corrected'
+        ? el('span',{style:{fontSize:'11px',color:'var(--amber)',background:'rgba(224,148,60,0.12)',border:'1px solid rgba(224,148,60,0.3)',borderRadius:'4px',padding:'2px 8px',fontFamily:'var(--mono)'}},'⚡ Dilution-corrected')
+        : S.absMode==='normalized'
+        ? el('span',{style:{fontSize:'11px',color:'var(--purple)',background:'rgba(155,111,224,0.1)',border:'1px solid rgba(155,111,224,0.3)',borderRadius:'4px',padding:'2px 8px',fontFamily:'var(--mono)'}},'◈ Normalized — peak = 1.0')
+        : el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'Raw measured values');
+      const toggleBar = el('div',{class:'no-print pnl',style:{marginTop:'0',marginBottom:'0',borderBottom:'none',borderBottomLeftRadius:'0',borderBottomRightRadius:'0'}},
+        el('div',{class:'pnl-body',style:{paddingTop:'10px',paddingBottom:'10px',display:'flex',alignItems:'center',gap:'12px',flexWrap:'wrap'}},
+          el('span',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.08em',flexShrink:'0'}},'Absorbance view'),
+          el('div',{style:{width:'1px',height:'18px',background:'var(--border)',flexShrink:'0'}}),
+          buildAbsToggle()
+        )
+      );
+      const chart = buildSpectrumChart(visibleScans.length ? visibleScans : scans,'UV-Vis Absorbance Overlay'+(S.absMode==='corrected'?' — Dilution-Corrected':S.absMode==='normalized'?' — Normalized (peak = 1.0)':''),false);
+      // Wrap toggle + chart together so they read as one unit
+      const wrap = el('div',{style:{marginBottom:'14px'}});
+      wrap.appendChild(toggleBar);
+      if(chart){
+        chart.style.marginTop='0';
+        chart.style.borderTopLeftRadius='0';
+        chart.style.borderTopRightRadius='0';
+        wrap.appendChild(chart);
+      }
+      return wrap;
+    })():'',
     scans.length>=2?(()=>{
       // Collect only charts that have data (buildLongChart returns null if <2 points)
       const charts=[];
+      // ── Per-metric correction policy ────────────────────────────────────────
+      // true  = always dilution-corrected (absolute AU metrics — affected by dilution)
+      // false = always raw/measured      (ratio & shape metrics — dilution cancels out)
       [
-        ['peakWl','λ max (Peak Wavelength)','nm','var(--gold)'],
-        ['maxAb','Max Absorbance (OD)','AU','var(--blue)'],
-        ['fwhm','FWHM','nm','var(--purple)'],
-        ['peakTrough','Peak:Trough Ratio at 480nm','','var(--green)'],
-        ['tail','Long-Wavelength Tail (700–900nm)','AU','var(--amber)'],
-        ['protein280','280nm Protein Abs','AU','var(--blue)'],
-      ].forEach(([m,lbl,unit,col])=>{
-        const c=buildLongChart(scans,m,lbl,unit,col,lot.od);
+        ['peakWl',      'λ max (Peak Wavelength)',             'nm', 'var(--gold)',    false],
+        ['maxAb',       'Max Absorbance (OD)',                 'AU', 'var(--blue)',    true ],
+        ['odRatio',     'OD Ratio 550:700 — Primary Aggregation Metric', '', 'var(--green)',  false],
+        ['fwhm',        'FWHM',                               'nm', 'var(--purple)',  false],
+        ['tail',        'Long-Wavelength Tail (700–900nm)',   'AU', 'var(--amber)',   true ],
+        ['peakTrough',  'Peak:Trough Ratio at 480nm (secondary)', '', 'var(--text-2)', false],
+        ['protein280',  '280nm Protein Abs',                  'AU', 'var(--blue)',    true ],
+      ].forEach(([m,lbl,unit,col,fc])=>{
+        const c=buildLongChart(scans,m,lbl,unit,col,lot.od,fc);
         if(c)charts.push(c);
       });
       if(!charts.length)return null;
@@ -2088,7 +2519,17 @@ function buildDetail(){
           mkSelect('Scan Type', fType, allTypes, 'type'),
           mkSelect('Dil.', fDil, allDils, 'dil'),
           mkSelect('Diluent', fDiluent, allDiluents, 'diluent'),
-          hasFilters ? el('button',{class:'scan-filter-clear',onClick:clearScanFilters},'✕ Clear filters') : null
+          hasFilters ? el('button',{class:'scan-filter-clear',onClick:clearScanFilters},'✕ Clear filters') : null,
+          // ── Abs mode toggle — inline in filter bar ──
+          el('div',{style:{width:'1px',height:'18px',background:'var(--border)',flexShrink:'0',margin:'0 2px'}}),
+          el('span',{style:{fontSize:'11px',color:'var(--text-3)',whiteSpace:'nowrap',fontFamily:'var(--mono)',flexShrink:'0'}},'View:'),
+          ...[['measured','Measured'],['corrected','⚡ Dil-corrected'],['normalized','◈ Normalized']].map(([mode,lbl])=>
+            el('button',{
+              class:'chip'+(S.absMode===mode?' on':''),
+              style:{padding:'3px 10px',fontSize:'10.5px'},
+              onClick:()=>setState({absMode:mode})
+            },lbl)
+          )
         );
         return filterBar;
       })(),
@@ -2104,7 +2545,8 @@ function buildDetail(){
             cbTh.appendChild(headerCb);
             return el('thead',{},el('tr',{},
               cbTh,
-              ...('Date,Scan ID,Description,Operator,Scan Type,Diluent,Dil.,λ max,Abs max,ΔOD%,FWHM,P:T,Tail,280nm,Δ Theor.,Notes,').split(',').filter(Boolean).map(h=>el('th',{},h))
+              el('th',{style:{width:'24px'}},''),
+              ...('Date,Scan ID,Description,Operator,Scan Type,Dil.,λ max,Abs max,ΔOD%,Notes,').split(',').filter(Boolean).map(h=>el('th',{},h))
             ));
           })(),
           scanRows
@@ -2122,244 +2564,18 @@ function buildDetail(){
 // ============================================================================
 // CURVE DELTA COMPARISON PANEL — clean, consolidated
 // ============================================================================
-function buildDeltaComparison(chartScans, lots) {
-  if (chartScans.length < 2) return null;
-
-  const entries = chartScans.map((sc, i) => {
-    const lot = lots.find(l => DB.getScans(l.id).find(s => s.id === sc.id));
-    const an = getAn(sc, lot ? lot.od : 0);
-    return { sc, an, color: SCAN_COLORS[i % SCAN_COLORS.length], label: sc.lotLabel || sc.scanLabel || fmtDate(sc.date) };
-  }).filter(e => e.an);
-
-  if (entries.length < 2) return null;
-
-  const ref = entries[0];
-
-  const metrics = [
-    { key:'peakWl',     label:'λ max',      unit:'nm', dec:1, good:5,  warn:15,  higherBad:false },
-    { key:'maxAb',      label:'Abs max',     unit:'AU', dec:4, good:0.05,warn:0.15,higherBad:false },
-    { key:'fwhm',       label:'FWHM',        unit:'nm', dec:1, good:5,  warn:15,  higherBad:true  },
-    { key:'peakTrough', label:'P:T',         unit:'',   dec:2, good:0.2,warn:0.5, higherBad:true  },
-    { key:'tail',       label:'Tail',        unit:'AU', dec:4, good:0.005,warn:0.02,higherBad:true },
-    { key:'odPctChange',label:'ΔOD%',        unit:'%',  dec:1, good:5,  warn:15,  higherBad:false },
-  ];
-
-  function fmtVal(v, dec, unit) {
-    if (v == null) return '—';
-    return v.toFixed(dec) + (unit ? '\u202f' + unit : '');
-  }
-  function deltaColor(absDelta, good, warn, delta, higherBad) {
-    if (absDelta < 0.000001) return 'var(--text-3)';
-    const bad = higherBad ? delta > 0 : false; // for fwhm/tail/pt, increase is bad
-    const isBad = absDelta >= warn;
-    const isWarn = absDelta >= good && absDelta < warn;
-    if (isBad) return 'var(--red)';
-    if (isWarn) return 'var(--amber)';
-    return 'var(--green)';
-  }
-
-  const container = el('div', { class: 'delta-panel delta-animate' });
-
-  const hdr = el('div', { class: 'delta-header' },
-    el('div', { class: 'delta-title' }, 'Curve Comparison'),
-    el('div', { style:{ fontSize:'11px', color:'var(--text-3)' } },
-      'Reference: ',
-      el('span', { style:{ color:ref.color, fontWeight:'600' } }, ref.label)
-    )
-  );
-  container.appendChild(hdr);
-
-  const body = el('div', { class:'delta-body', style:{ padding:'0' } });
-
-  // ── One compact table per comparison ──────────────────────────────────
-  entries.slice(1).forEach((cmp, ci) => {
-    // Section divider for multiple comparisons
-    if (ci > 0) body.appendChild(el('div', { style:{ borderTop:'1px solid var(--border)', margin:'0' } }));
-
-    // Comparison label row
-    const cmpHdr = el('div', { style:{
-      display:'flex', alignItems:'center', gap:'8px',
-      padding:'12px 20px 8px', background:'var(--surface)'
-    }},
-      el('span', { style:{ width:'10px',height:'10px',borderRadius:'50%',background:ref.color,display:'inline-block',flexShrink:'0' } }),
-      el('span', { style:{ fontSize:'12px',color:'var(--text-2)' } }, ref.label),
-      el('span', { style:{ color:'var(--text-3)', fontSize:'13px', margin:'0 2px' } }, '→'),
-      el('span', { style:{ width:'10px',height:'10px',borderRadius:'50%',background:cmp.color,display:'inline-block',flexShrink:'0' } }),
-      el('span', { style:{ fontSize:'12px',fontWeight:'600',color:'var(--text)' } }, cmp.label)
-    );
-    body.appendChild(cmpHdr);
-
-    // Metrics table
-    const tbl = el('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:'12px' } });
-    const thead = el('thead',{}, el('tr',{},
-      el('th',{style:{padding:'7px 20px',textAlign:'left',color:'var(--text-3)',fontSize:'11px',fontWeight:'500',borderBottom:'1px solid var(--border)',width:'90px'}},'Metric'),
-      el('th',{style:{padding:'7px 12px',textAlign:'right',color:ref.color,fontSize:'11px',fontWeight:'500',borderBottom:'1px solid var(--border)'}},'Ref'),
-      el('th',{style:{padding:'7px 12px',textAlign:'right',color:cmp.color,fontSize:'11px',fontWeight:'500',borderBottom:'1px solid var(--border)'}},'Compare'),
-      el('th',{style:{padding:'7px 20px 7px 12px',textAlign:'right',color:'var(--text-3)',fontSize:'11px',fontWeight:'500',borderBottom:'1px solid var(--border)'}},'Change')
-    ));
-    tbl.appendChild(thead);
-
-    const tbody = el('tbody',{});
-    let rowIdx = 0;
-    metrics.forEach(m => {
-      const rv = ref.an[m.key], cv = cmp.an[m.key];
-      if (rv == null && cv == null) return;
-      const delta = (rv != null && cv != null) ? cv - rv : null;
-      const absDelta = delta != null ? Math.abs(delta) : null;
-      const dColor = delta != null ? deltaColor(absDelta, m.good, m.warn, delta, m.higherBad) : 'var(--text-3)';
-      const arrow = delta == null ? '' : absDelta < 0.000001 ? '=' : delta > 0 ? '↑' : '↓';
-      const pct = (delta != null && rv != null && Math.abs(rv) > 0.000001)
-        ? ((delta / Math.abs(rv)) * 100)
-        : null;
-      const changeStr = delta != null
-        ? (delta > 0 ? '+' : '') + delta.toFixed(m.dec) + (m.unit ? '\u202f' + m.unit : '') + (pct != null ? '  (' + (pct > 0 ? '+' : '') + pct.toFixed(1) + '%)' : '')
-        : '—';
-
-      const row = el('tr',{ style:{ background: rowIdx % 2 === 0 ? 'transparent' : 'var(--surface)' } },
-        el('td',{style:{padding:'8px 20px',color:'var(--text-2)',fontWeight:'500'}}, m.label + (m.unit ? ' ('+m.unit+')' : '')),
-        el('td',{style:{padding:'8px 12px',textAlign:'right',fontFamily:'var(--mono)',color:'var(--text-2)'}}, fmtVal(rv, m.dec, m.unit)),
-        el('td',{style:{padding:'8px 12px',textAlign:'right',fontFamily:'var(--mono)',color:'var(--text)'}}, fmtVal(cv, m.dec, m.unit)),
-        el('td',{style:{padding:'8px 20px 8px 12px',textAlign:'right',fontFamily:'var(--mono)',color:dColor,fontWeight:'600'}},
-          arrow ? el('span',{style:{marginRight:'4px'}},'arrow') : null,
-          changeStr.replace('arrow','')
-        )
-      );
-      // Fix: rebuild the last cell properly
-      const lastTd = row.lastChild;
-      lastTd.textContent = '';
-      if (arrow) {
-        const arrowSpan = el('span',{style:{marginRight:'5px', fontSize:'13px'}}, arrow);
-        lastTd.appendChild(arrowSpan);
-      }
-      lastTd.appendChild(document.createTextNode(changeStr));
-      tbody.appendChild(row);
-      rowIdx++;
-    });
-    tbl.appendChild(tbody);
-    body.appendChild(tbl);
-
-    // Spectral diff mini-chart
-    const refRaw = getRaw(ref.sc);
-    const cmpRaw = getRaw(cmp.sc);
-    if (refRaw.length > 10 && cmpRaw.length > 10) {
-      function interp(raw, wl) {
-        for (let i = 1; i < raw.length; i++) {
-          if (raw[i].wl >= wl) {
-            const t = (wl - raw[i-1].wl) / (raw[i].wl - raw[i-1].wl);
-            return raw[i-1].ab + t * (raw[i].ab - raw[i-1].ab);
-          }
-        }
-        return null;
-      }
-      const wlLo = Math.max(270, Math.min(refRaw[0].wl, cmpRaw[0].wl));
-      const wlHi = Math.min(850, Math.max(refRaw[refRaw.length-1].wl, cmpRaw[cmpRaw.length-1].wl));
-      const diffPts = [];
-      refRaw.filter(p => p.wl >= wlLo && p.wl <= wlHi).forEach(p => {
-        const cv2 = interp(cmpRaw, p.wl);
-        if (cv2 != null) diffPts.push({ wl: p.wl, d: cv2 - p.ab });
-      });
-
-      if (diffPts.length > 5) {
-        const dMin = Math.min(0, ...diffPts.map(p => p.d));
-        const dMax = Math.max(0, ...diffPts.map(p => p.d));
-        const pad = Math.max(Math.abs(dMax - dMin) * 0.2, 0.002);
-        const lo = dMin - pad, hi = dMax + pad;
-        const SW=620,SH=80,SPL=48,SPR=12,SPT=8,SPB=22;
-        const scW=SW-SPL-SPR,scH=SH-SPT-SPB;
-        const xp = wl => SPL + (wl-wlLo)/(wlHi-wlLo)*scW;
-        const yp = d => SPT + scH - (d-lo)/(hi-lo)*scH;
-        const zero = yp(0);
-
-        const ns = 'http://www.w3.org/2000/svg';
-        const svg = document.createElementNS(ns,'svg');
-        svg.setAttribute('viewBox',`0 0 ${SW} ${SH}`);
-        svg.setAttribute('style','width:100%;display:block;padding:12px 20px 16px;box-sizing:border-box;');
-
-        const mkEl = (tag, attrs) => { const e=document.createElementNS(ns,tag); Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v)); return e; };
-
-        // Plot background
-        svg.appendChild(mkEl('rect',{x:SPL,y:SPT,width:scW,height:scH,fill:'var(--surface)',rx:'2'}));
-        // Zero line
-        svg.appendChild(mkEl('line',{x1:SPL,y1:zero,x2:SPL+scW,y2:zero,stroke:'rgba(160,180,208,0.25)',strokeDasharray:'4,3'}));
-
-        // Area fill
-        let aD = diffPts.map((p,i)=>`${i===0?'M':'L'}${xp(p.wl).toFixed(1)},${yp(p.d).toFixed(1)}`).join(' ');
-        aD += ` L${xp(diffPts[diffPts.length-1].wl).toFixed(1)},${zero.toFixed(1)} L${xp(diffPts[0].wl).toFixed(1)},${zero.toFixed(1)} Z`;
-        const defs = document.createElementNS(ns,'defs');
-        const gid = 'dg'+ci+'_'+Date.now();
-        const grad = mkEl('linearGradient',{id:gid,x1:'0',y1:'0',x2:'0',y2:'1'});
-        const s1=document.createElementNS(ns,'stop'); s1.setAttribute('offset','0%'); s1.setAttribute('stop-color',cmp.color); s1.setAttribute('stop-opacity','0.5');
-        const s2=document.createElementNS(ns,'stop'); s2.setAttribute('offset','100%'); s2.setAttribute('stop-color',cmp.color); s2.setAttribute('stop-opacity','0.05');
-        grad.appendChild(s1); grad.appendChild(s2); defs.appendChild(grad); svg.appendChild(defs);
-        const area = document.createElementNS(ns,'path'); area.setAttribute('d',aD); area.setAttribute('fill',`url(#${gid})`);
-        svg.appendChild(area);
-
-        // Diff line
-        const lineD = diffPts.map((p,i)=>`${i===0?'M':'L'}${xp(p.wl).toFixed(1)},${yp(p.d).toFixed(1)}`).join(' ');
-        svg.appendChild(mkEl('path',{d:lineD,fill:'none',stroke:cmp.color,'stroke-width':'1.5'}));
-
-        // Max divergence annotation
-        const maxPt = diffPts.reduce((a,b)=>Math.abs(b.d)>Math.abs(a.d)?b:a,diffPts[0]);
-        const mx=xp(maxPt.wl), my=yp(maxPt.d);
-        const dotColor = maxPt.d >= 0 ? 'var(--green)' : 'var(--red)';
-        svg.appendChild(mkEl('circle',{cx:mx,cy:my,r:'3',fill:dotColor}));
-        svg.appendChild(mkEl('line',{x1:mx,y1:zero,x2:mx,y2:my,stroke:dotColor,'stroke-width':'1','stroke-dasharray':'2,2',opacity:'0.7'}));
-        const txtX = Math.min(SW-SPR-70, Math.max(SPL+2, mx-35));
-        const txtY = maxPt.d>=0 ? Math.max(SPT+10, my-5) : Math.min(SPT+scH-2, my+11);
-        const annot = document.createElementNS(ns,'text');
-        annot.setAttribute('x',txtX); annot.setAttribute('y',txtY);
-        annot.setAttribute('fill',dotColor); annot.setAttribute('font-size','8.5');
-        annot.setAttribute('font-family','var(--mono)');
-        annot.textContent = (maxPt.d>=0?'+':'') + maxPt.d.toFixed(4)+' AU @ '+maxPt.wl.toFixed(0)+'nm';
-        svg.appendChild(annot);
-
-        // X axis labels
-        [wlLo, Math.round((wlLo+wlHi)/2), wlHi].forEach(wl => {
-          const xt = document.createElementNS(ns,'text');
-          xt.setAttribute('x',xp(wl).toFixed(1)); xt.setAttribute('y',SPT+scH+13);
-          xt.setAttribute('fill','rgba(160,180,208,0.5)'); xt.setAttribute('font-size','8');
-          xt.setAttribute('text-anchor','middle'); xt.setAttribute('font-family','var(--mono)');
-          xt.textContent = wl+'nm'; svg.appendChild(xt);
-        });
-
-        // Y axis label
-        const yt = document.createElementNS(ns,'text');
-        yt.setAttribute('x',SPL-4); yt.setAttribute('y',SPT+scH/2);
-        yt.setAttribute('fill','rgba(160,180,208,0.4)'); yt.setAttribute('font-size','8');
-        yt.setAttribute('text-anchor','middle'); yt.setAttribute('font-family','var(--mono)');
-        yt.setAttribute('transform',`rotate(-90,${SPL-4},${SPT+scH/2})`);
-        yt.textContent='Δ Abs (AU)'; svg.appendChild(yt);
-
-        const chartWrap = el('div',{style:{padding:'0 0 4px',borderTop:'1px solid var(--border)'}});
-        const chartLbl = el('div',{style:{padding:'8px 20px 0',fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)'}},
-          'Δ Absorbance spectrum  (compare − reference)');
-        chartWrap.appendChild(chartLbl);
-        chartWrap.appendChild(svg);
-        body.appendChild(chartWrap);
-      }
-    }
-  });
-
-  container.appendChild(body);
-  return container;
-}
-
-
 function buildCompare(){
   const lots=DB.getLots();const sel=S.compare;
   const q=(S.compareSearch||'').toLowerCase();
   const scanChecks = S.compareScanChecks || {};
   const scanSel = S.compareScanSel || {};
 
-  // Resolve scans for a lot: checkboxes take priority, else dropdown
+  // Compare is cross-lot only — always resolve to exactly 1 scan per lot
   function resolveCheckedScans(lid) {
     const lot = lots.find(l => l.id === lid);
     const sc = DB.getScans(lid).sort((a,b) => new Date(a.date)-new Date(b.date));
     if (!sc.length) return [];
     sc.forEach(x => { x._lotSize = lot ? lot.size : 0; });
-    const checked = scanChecks[lid];
-    if (checked && checked.length > 0) return sc.filter(s => checked.includes(s.id));
-    // Fall back to dropdown
     const mode = scanSel[lid] || 'latest';
     if (mode === 'latest') return [sc[sc.length-1]];
     if (mode === 'first') return [sc[0]];
@@ -2417,7 +2633,7 @@ function buildCompare(){
   const scanSelPanel = sel.length ? el('div',{class:'pnl'},
     el('div',{class:'pnl-head'},
       el('span',{class:'pnl-title'},'Scan Selection'),
-      el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'Choose which scan(s) to display for each lot')
+      el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'Choose which scan to display for each lot')
     ),
     el('div',{class:'pnl-body'},
       el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'10px'}},
@@ -2425,54 +2641,36 @@ function buildCompare(){
           const lot=lots.find(l=>l.id===lid);
           if(!lot)return null;
           const allSc=DB.getScans(lid).sort((a,b)=>new Date(a.date)-new Date(b.date));
-          const checked = new Set(scanChecks[lid] || []);
           const mode=scanSel[lid]||'latest';
           const hasPre=allSc.some(s=>s.scanType==='pre-conjugation');
           const hasPost=allSc.some(s=>s.scanType==='post-conjugation');
           const chosen=resolveCompareScan(lid);
           const qcColor=Analytics.qcStatus(allSc,lot.od).color;
 
-          // Dropdown with checkboxes inside each specific scan option
           const sel2=el('select',{class:'inp',style:{fontSize:'11.5px'}});
           const opts=[['latest','Latest scan'],['first','First scan / Incoming QC']];
-          if(hasPre)opts.push(['pre-conjugation','Pre-conjugation']);
+          if(hasPre)opts.push(['pre-conjugation','Pre-conjugation (latest)']);
           if(hasPost)opts.push(['post-conjugation','Post-conjugation (latest)']);
           opts.push(['──','── Specific Scans ──']);
           allSc.forEach(s=>{
             const typeTag=s.scanType==='pre-conjugation'?' [pre]':s.scanType==='post-conjugation'?' [post-conj]':'';
-            const checkMark = checked.has(s.id) ? '☑ ' : '☐ ';
-            opts.push([s.id, checkMark + s.date+(s.op?' · '+s.op:'')+typeTag]);
+            opts.push([s.id, fmtDate(s.date)+(s.op?' · '+s.op:'')+typeTag+(s.scanLabel?' · '+s.scanLabel:'')]);
           });
           opts.forEach(([v,t])=>{
             const opt=document.createElement('option');opt.value=v;opt.textContent=t;
             if(v==='──'){opt.disabled=true;opt.style.color='var(--text-3)';}
-            if(v===mode&&!checked.size)opt.selected=true;
+            if(v===mode)opt.selected=true;
             sel2.appendChild(opt);
           });
           sel2.addEventListener('change',e=>{
-            const val = e.target.value;
-            // If selecting a specific scan, toggle its checkbox
-            if(allSc.find(s=>s.id===val)){
-              const next = new Set(scanChecks[lid]||[]);
-              if(next.has(val)) next.delete(val); else next.add(val);
-              setState({compareScanChecks: Object.assign({},scanChecks,{[lid]:[...next]}), compareScanSel: Object.assign({},scanSel,{[lid]:val})});
-            } else {
-              // Preset mode: clear checkboxes and use dropdown
-              setState({compareScanChecks: Object.assign({},scanChecks,{[lid]:[]}), compareScanSel: Object.assign({},scanSel,{[lid]:val})});
-            }
+            setState({compareScanSel: Object.assign({},scanSel,{[lid]:e.target.value})});
           });
 
-          // Show active checkmarks count
-          const checkInfo = checked.size > 0
-            ? el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--blue)',fontFamily:'var(--mono)'}},
-                '☑ '+checked.size+' scan'+(checked.size!==1?'s':'')+' selected · ',
-                el('button',{style:{fontSize:'10.5px',color:'var(--text-3)',background:'none',border:'none',cursor:'pointer',padding:'0',fontFamily:'var(--mono)'},
-                  onClick:()=>setState({compareScanChecks:Object.assign({},scanChecks,{[lid]:[]})})
-                },'clear')
-              )
-            : chosen?el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--text-3)',fontFamily:'var(--mono)'}},
+          const chosenInfo = chosen
+            ? el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--text-3)',fontFamily:'var(--mono)'}},
                 '→ '+fmtDate(chosen.date)+(chosen.op?' · '+chosen.op:'')+(chosen.scanType&&chosen.scanType!=='stability'?' · '+chosen.scanType.replace('-',' '):'')
-              ):el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--red)',fontFamily:'var(--mono)'}},'No matching scan found');
+              )
+            : el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--red)',fontFamily:'var(--mono)'}},'No matching scan found');
 
           return el('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px 14px'}},
             el('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'}},
@@ -2481,7 +2679,7 @@ function buildCompare(){
               el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},lot.size+'nm · '+allSc.length+' scans')
             ),
             sel2,
-            checkInfo
+            chosenInfo
           );
         }).filter(Boolean)
       )
@@ -2507,28 +2705,69 @@ function buildCompare(){
     ),
     scanSelPanel,
     chartScans.length?buildSpectrumChart(chartScans,'Scan Comparison Overlay',true):'',
-    chartScans.length >= 2 ? buildDeltaComparison(chartScans, lots) : null,
     rows.length?el('div',{class:'pnl'},
       el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},'Comparison Summary')),
-      el('div',{class:'tbl-wrap'},
-        el('table',{},
-          el('thead',{},el('tr',{},...'Lot,Size,Scans,Selected Scan,λ max,Abs max,FWHM,Peak Drift,Status'.split(',').map(h=>el('th',{},h)))),
-          el('tbody',{},...rows.map(r=>{
-            const a=r.chosen?getAn(r.chosen,r.lot.od):null;
-            const scanMode=scanSel[r.lot.id]||'latest';
-            const modeLabel=scanMode==='latest'?'Latest':scanMode==='first'?'First':scanMode==='pre-conjugation'?'Pre-conj':scanMode==='post-conjugation'?'Post-conj':r.chosen?fmtDate(r.chosen.date):'—';
-            return el('tr',{},
-              el('td',{style:{fontFamily:'var(--mono)',color:'var(--gold)',fontWeight:'500'}},r.lot.lotNumber),
-              el('td',{style:{fontFamily:'var(--mono)'}},r.lot.size+' nm'),
-              el('td',{style:{fontFamily:'var(--mono)'}},r.allSc.length),
-              el('td',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--text-2)'}},modeLabel+(r.chosen?' ('+fmtDate(r.chosen.date)+')':'')),
-              el('td',{style:{fontFamily:'var(--mono)'}},a?a.peakWl+' nm':'—'),
-              el('td',{style:{fontFamily:'var(--mono)'}},a?a.maxAb+' AU':'—'),
-              el('td',{style:{fontFamily:'var(--mono)'}},a&&a.fwhm?a.fwhm+' nm':'—'),
-              el('td',{style:{fontFamily:'var(--mono)'}},r.qc.drift!=null?r.qc.drift.toFixed(1)+' nm':'—'),
-              el('td',{},mkStatusBadge(r.qc))
+      el('div',{class:'pnl-body'},
+        el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:'10px'}},
+          ...rows.map((r, ri)=>{
+            const a = r.chosen ? getAnCorrected(r.chosen, r.lot.od) : null;
+            const scanMode = scanSel[r.lot.id]||'latest';
+            const scanDesc = r.chosen ? (r.chosen.scanLabel||'—')+' · '+(r.chosen.scanType||'stability').replace('-',' ')+' · '+fmtDate(r.chosen.date) : '—';
+
+            // Cross-lot peak drift: compare this lot's λmax to the reference lot (first card)
+            const refA = rows[0].chosen ? getAnCorrected(rows[0].chosen, rows[0].lot.od) : null;
+            const crossDrift = (ri > 0 && a && refA && a.peakWl && refA.peakWl)
+              ? Math.round((a.peakWl - refA.peakWl) * 100) / 100
+              : null;
+            const crossDriftAbs = crossDrift != null ? Math.abs(crossDrift) : null;
+            const driftC = crossDrift == null ? 'var(--text-3)'
+              : crossDriftAbs > 5 ? 'var(--red)'
+              : crossDriftAbs > 2 ? 'var(--amber)'
+              : 'var(--green)';
+
+            // Out-of-range signals — only shown when comparing 2+ lots
+            const signals = [];
+            if(rows.length >= 2 && a){
+              if(a.odRatio != null && a.odRatio < 2.5) signals.push({
+                label:'OD 550:700', val: a.odRatio.toFixed(2),
+                c: a.odRatio < 1.5 ? 'var(--red)' : 'var(--amber)'
+              });
+              if(a.tail != null && a.tail > 0.005) signals.push({
+                label:'Tail 700–900nm', val: a.tail.toFixed(4)+' AU',
+                c: a.tail > 0.02 ? 'var(--red)' : 'var(--amber)'
+              });
+              if(a.fwhm != null && a.fwhm > 120) signals.push({
+                label:'FWHM', val: a.fwhm+' nm', c: 'var(--amber)'
+              });
+            }
+
+            // QC status based only on this lot's chosen scan metrics
+            const scanQc = a ? Analytics.qcStatus([r.chosen], r.lot.od) : r.qc;
+
+            return el('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'14px 16px',display:'flex',flexDirection:'column',gap:'8px'}},
+              // Lot number + status
+              el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},
+                el('span',{style:{fontFamily:'var(--mono)',fontWeight:'700',fontSize:'14px',color:'var(--gold)'}},r.lot.lotNumber),
+                mkStatusBadge(r.qc)
+              ),
+              // Selected scan
+              el('div',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)',lineHeight:'1.5'}},scanDesc),
+              // Peak drift vs reference — only shown for non-reference lots when 2+ selected
+              rows.length >= 2 ? el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',borderTop:'1px solid var(--border)',paddingTop:'8px'}},
+                el('span',{style:{fontSize:'11px',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em'}},
+                  ri === 0 ? 'Reference' : 'Peak drift vs ref'
+                ),
+                el('span',{style:{fontFamily:'var(--mono)',fontSize:'13px',fontWeight:'600',color:ri===0?'var(--text-3)':driftC}},
+                  ri === 0 ? '—' : crossDrift != null ? (crossDrift > 0 ? '+' : '') + crossDrift + ' nm' : '—'
+                )
+              ) : null,
+              // Out-of-range signals
+              ...signals.map(sig=>el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
+                el('span',{style:{fontSize:'11px',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em'}},sig.label),
+                el('span',{style:{fontFamily:'var(--mono)',fontSize:'13px',fontWeight:'600',color:sig.c}},sig.val)
+              ))
             );
-          }))
+          })
         )
       )
     ):el('div',{class:'empty'},el('div',{class:'empty-icon'},'📊'),el('div',{class:'empty-msg'},sel.length?'No comparison data available':'Select lots above to compare'))
@@ -2539,28 +2778,27 @@ function buildCompare(){
 // SPECTRUM CHART (SVG) — OriginLab style
 // ============================================================================
 function buildSpectrumChart(scans,title,useLotLabel){
-  const W=900,H=380,PL=30,PR=24,PT=20,PB=60;
-  const cW=W-PL-PR,cH=H-PT-PB;
+  // ── Layout ──────────────────────────────────────────────────────────────
+  // PL=72 gives: 12px Y-title + 8px gap + ~34px for 5-char tick labels + 8px gap to axis
+  const W=900, H=420, PL=72, PR=28, PT=32, PB=54;
+  const cW=W-PL-PR, cH=H-PT-PB;
 
-  let dataMin=Infinity,dataMax=-Infinity;
+  const isNormalized = S.absMode==='normalized';
+
+  let dataMin=Infinity, dataMax=-Infinity;
   scans.forEach(s=>getRaw(s).forEach(p=>{if(p.wl<dataMin)dataMin=p.wl;if(p.wl>dataMax)dataMax=p.wl;}));
-  // Always start at 270nm minimum — data below this (190–270nm) has extreme
-  // negative/positive UV values that completely blow up the Y axis scale,
-  // making the SPR peak region look like noise.
   const wlMin=270;
   const wlMax=dataMax>700?Math.min(dataMax,900):750;
-  let mnA=Infinity,mxA=-Infinity;
+  let mnA=Infinity, mxA=-Infinity;
   scans.forEach(s=>getRaw(s).filter(p=>p.wl>=wlMin&&p.wl<=wlMax).forEach(p=>{if(p.ab<mnA)mnA=p.ab;if(p.ab>mxA)mxA=p.ab;}));
   if(mnA===Infinity){mnA=0;mxA=1;}
-  // Clamp Y min to 0 — negative absorbance values are instrument artefacts
-  // that stretch the axis and make real signal look compressed/noisy
-  mnA=Math.max(0,mnA);
+  if(isNormalized){mnA=0;mxA=1.0;}
+  else mnA=Math.max(0,mnA);
   const abR=niceRange(mnA*0.95,mxA*1.05);
+  if(isNormalized){abR.min=0;abR.max=1.0;}
 
-  // Cap Y ticks to max 6 for UV-Vis
   function uvNiceTicks(lo,hi){
-    const range=hi-lo||1;
-    const rough=range/5;
+    const range=hi-lo||1, rough=range/5;
     const mag=Math.pow(10,Math.floor(Math.log10(rough)));
     const nice=[1,2,2.5,5,10].map(f=>f*mag).find(f=>range/f<=6)||mag;
     const start=Math.ceil(lo/nice)*nice;
@@ -2569,158 +2807,173 @@ function buildSpectrumChart(scans,title,useLotLabel){
     return ticks;
   }
 
-  // X ticks every 50nm, filtered for spacing
-  const rawTicks=[];for(let t=Math.ceil(wlMin/50)*50;t<=wlMax;t+=50)rawTicks.push(t);
-  if(wlMin<=280&&!rawTicks.includes(280))rawTicks.push(280);
-  rawTicks.sort((a,b)=>a-b);
-  const xP=wl=>PL+(wl-wlMin)/(wlMax-wlMin)*cW;
-  const xTicks=rawTicks.filter((v,i,arr)=>i===0||xP(v)-xP(arr[i-1])>=30);
-  const yTicks=uvNiceTicks(abR.min,abR.max);
-  const yP=ab=>PT+cH-(ab-abR.min)/(abR.max-abR.min)*cH;
   const vis=scans.map(()=>true);
-
-  // OriginLab theme colors — works in both dark & light mode
   const isLight=document.body.classList.contains('light');
-  const axisColor=isLight?'#222':'#C8D8F0';
-  const tickColor=isLight?'#222':'#C8D8F0';
-  const gridColor=isLight?'rgba(0,0,0,0.06)':'rgba(255,255,255,0.06)';
-  const bgColor=isLight?'#fff':'#0E131C';
-  const labelColor=isLight?'#333':'#A0B4D0';
-  const axisTitleColor=isLight?'#111':'#D0DCF0';
-  const TICK_LEN=5;
-  const MINOR_TICK=3;
+
+  // Theme palette
+  const bgColor      = isLight ? '#ffffff'               : '#0B1118';
+  const axisColor    = isLight ? '#2a2a2a'               : '#B8CCE8';
+  const gridColor    = isLight ? 'rgba(0,0,0,0.07)'      : 'rgba(255,255,255,0.06)';
+  const tickLblColor = isLight ? '#3a3a3a'               : '#8AAAC8';
+  const titleColor   = isLight ? '#111111'               : '#C8DCF0';
+  const annotColor   = '#4A9FE0';  // 280nm guide — same in both modes
+  const TICK  = 5;   // outward tick length
+  const mTICK = 2;   // minor (top/right) tick
+
+  function smoothAndDecimate(rawPts, smoothNm, maxPts){
+    if(!rawPts.length) return [];
+    const step=rawPts.length>1?(rawPts[rawPts.length-1].wl-rawPts[0].wl)/(rawPts.length-1):0.1;
+    const half=Math.max(1,Math.round((smoothNm/2)/step));
+    const sm=rawPts.map((p,i)=>{
+      const lo=Math.max(0,i-half), hi=Math.min(rawPts.length-1,i+half);
+      let s=0; for(let j=lo;j<=hi;j++) s+=rawPts[j].ab;
+      return{wl:p.wl,ab:s/(hi-lo+1)};
+    });
+    if(sm.length<=maxPts) return sm;
+    const out=[], stride=sm.length/maxPts;
+    for(let i=0;i<maxPts;i++) out.push(sm[Math.round(i*stride)]);
+    return out;
+  }
 
   function buildSVG(zwlMin, zwlMax, zabMin, zabMax){
-    // Use zoom bounds if provided, else full range
-    const curWlMin = zwlMin !== undefined ? zwlMin : wlMin;
-    const curWlMax = zwlMax !== undefined ? zwlMax : wlMax;
-    // Recompute ticks for current zoom window
-    const curAbMin = zabMin !== undefined ? zabMin : abR.min;
-    const curAbMax = zabMax !== undefined ? zabMax : abR.max;
-    const curXTicks = (() => {
-      const rawT = []; for(let t=Math.ceil(curWlMin/50)*50; t<=curWlMax; t+=50) rawT.push(t);
-      if(curWlMin<=280 && curWlMax>=280 && !rawT.includes(280)) rawT.push(280);
-      rawT.sort((a,b)=>a-b);
-      const xPt = wl => PL+(wl-curWlMin)/(curWlMax-curWlMin)*cW;
-      return rawT.filter((v,i,arr)=>i===0||xPt(v)-xPt(arr[i-1])>=30);
-    })();
-    const curYTicks = uvNiceTicks(curAbMin, curAbMax);
-    const xP = wl => PL+(wl-curWlMin)/(curWlMax-curWlMin)*cW;
-    const yP = ab => PT+cH-(ab-curAbMin)/(curAbMax-curAbMin)*cH;
-    const s=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,class:'chart'});
+    const wl0=zwlMin??wlMin, wl1=zwlMax??wlMax;
+    const ab0=zabMin??abR.min, ab1=zabMax??abR.max;
 
-    // Plot area fill (OriginLab white/near-white background inside axes)
-    s.appendChild(svgEl('rect',{x:PL,y:PT,width:cW,height:cH,fill:bgColor}));
+    // X ticks — every 50nm, min 40px spacing
+    const xtRaw=[]; for(let t=Math.ceil(wl0/50)*50;t<=wl1;t+=50) xtRaw.push(t);
+    if(wl0<=280&&wl1>=280&&!xtRaw.includes(280)) xtRaw.push(280);
+    xtRaw.sort((a,b)=>a-b);
+    const xPt=wl=>PL+(wl-wl0)/(wl1-wl0)*cW;
+    const xTicks=xtRaw.filter((v,i,a)=>i===0||xPt(v)-xPt(a[i-1])>=40);
+    const yTicks=uvNiceTicks(ab0,ab1);
+    const xP=wl=>PL+(wl-wl0)/(wl1-wl0)*cW;
+    const yP=ab=>PT+cH-(ab-ab0)/(ab1-ab0)*cH;
 
-    // Subtle horizontal dotted gridlines (OriginLab default)
-    curYTicks.forEach(v=>{
-      s.appendChild(svgEl('line',{x1:PL,y1:yP(v).toFixed(1),x2:PL+cW,y2:yP(v).toFixed(1),stroke:gridColor,strokeWidth:'1',strokeDasharray:'2,4'}));
+    const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,class:'chart'});
+
+    // ── Layer 1: plot-area fill ────────────────────────────────────────────
+    svg.appendChild(svgEl('rect',{x:PL,y:PT,width:cW,height:cH,fill:bgColor}));
+
+    // ── Layer 2: horizontal gridlines ─────────────────────────────────────
+    yTicks.forEach(v=>{
+      const y=yP(v).toFixed(1);
+      svg.appendChild(svgEl('line',{x1:PL,y1:y,x2:PL+cW,y2:y,
+        stroke:gridColor,strokeWidth:'1',strokeDasharray:'3,6'}));
     });
 
-    // 280nm reference band
-    if(curWlMin<=280 && curWlMax>=280){
+    // ── Layer 3: 280nm vertical guide (very subtle) ────────────────────────
+    if(wl0<=280&&wl1>=280){
       const x280=xP(280).toFixed(1);
-      s.appendChild(svgEl('line',{x1:x280,y1:PT,x2:x280,y2:PT+cH,stroke:'#4A9FE0',strokeWidth:'1',strokeDasharray:'4,4',opacity:'0.5'}));
-      s.appendChild(svgEl('text',{x:parseFloat(x280)+4,y:PT+19,fill:'#4A9FE0',fontSize:'8.5',opacity:'0.8','font-family':'Inter,sans-serif','font-weight':'500'},'280 nm'));
+      svg.appendChild(svgEl('line',{x1:x280,y1:PT,x2:x280,y2:PT+cH,
+        stroke:annotColor,strokeWidth:'0.8',strokeDasharray:'3,6',opacity:'0.35'}));
     }
 
-    // Peak marker lines (subtle)
+    // ── Layer 4: normalized y=1.0 reference ───────────────────────────────
+    if(isNormalized&&ab1>=1.0&&ab0<=1.0){
+      svg.appendChild(svgEl('line',{x1:PL,y1:yP(1.0).toFixed(1),x2:PL+cW,y2:yP(1.0).toFixed(1),
+        stroke:isLight?'rgba(0,0,0,0.12)':'rgba(255,255,255,0.12)',
+        strokeWidth:'1',strokeDasharray:'6,4'}));
+    }
+
+    // ── Layer 5: data curves ───────────────────────────────────────────────
+    scans.forEach((sc,i)=>{
+      if(!vis[i]) return;
+      const raw=getRaw(sc).filter(p=>p.wl>=wl0&&p.wl<=wl1);
+      if(!raw.length) return;
+      let sm=smoothAndDecimate(raw,5,cW);
+      if(isNormalized){
+        const pk=sm.reduce((m,p)=>p.ab>m?p.ab:m,-Infinity);
+        if(pk>0) sm=sm.map(p=>({wl:p.wl,ab:p.ab/pk}));
+      }
+      const pts=sm.map(p=>[xP(p.wl),yP(p.ab)]);
+      svg.appendChild(svgEl('path',{
+        d:makePath(pts),fill:'none',
+        stroke:SCAN_COLORS[i%SCAN_COLORS.length],
+        strokeWidth:'1.9',strokeLinejoin:'round','stroke-linecap':'round'
+      }));
+    });
+
+    // ── Layer 6: subtle per-scan peak markers ─────────────────────────────
     scans.forEach((sc,i)=>{
       const an=getAn(sc);
-      if(!vis[i]||!an?.peakWl)return;
-      const x=xP(an.peakWl).toFixed(1);
-      s.appendChild(svgEl('line',{x1:x,y1:PT,x2:x,y2:PT+cH,stroke:SCAN_COLORS[i%SCAN_COLORS.length],strokeWidth:'0.8',strokeDasharray:'3,5',opacity:'0.45'}));
+      if(!vis[i]||!an?.peakWl) return;
+      svg.appendChild(svgEl('line',{
+        x1:xP(an.peakWl).toFixed(1),y1:PT,
+        x2:xP(an.peakWl).toFixed(1),y2:PT+cH,
+        stroke:SCAN_COLORS[i%SCAN_COLORS.length],
+        strokeWidth:'0.7',strokeDasharray:'2,5',opacity:'0.28'
+      }));
     });
 
-    // This NanoDrop exports at 0.1 nm steps (190–850nm = ~6600 pts).
-    // The tail region (600–850nm) has real ±0.05 AU instrument noise at near-zero
-    // absorbance — this is what creates the thick hairy band.
-    // Fix: apply a moving-average smooth, then decimate to 1pt per screen pixel.
-    function smoothAndDecimate(rawPts, smoothNm, maxPts) {
-      if (!rawPts.length) return [];
-      // Estimate step size
-      const step = rawPts.length > 1
-        ? (rawPts[rawPts.length-1].wl - rawPts[0].wl) / (rawPts.length - 1)
-        : 0.1;
-      const half = Math.max(1, Math.round((smoothNm / 2) / step));
-      // Moving average smooth
-      const smoothed = rawPts.map((p, i) => {
-        const lo = Math.max(0, i - half);
-        const hi = Math.min(rawPts.length - 1, i + half);
-        let sum = 0;
-        for (let j = lo; j <= hi; j++) sum += rawPts[j].ab;
-        return { wl: p.wl, ab: sum / (hi - lo + 1) };
-      });
-      // Decimate: keep at most maxPts evenly spaced points
-      if (smoothed.length <= maxPts) return smoothed;
-      const out = [];
-      const stride = smoothed.length / maxPts;
-      for (let i = 0; i < maxPts; i++) {
-        out.push(smoothed[Math.round(i * stride)]);
-      }
-      return out;
-    }
-    scans.forEach((sc,i)=>{
-      if(!vis[i])return;
-      const raw=getRaw(sc).filter(p=>p.wl>=curWlMin&&p.wl<=curWlMax);
-      if(!raw.length)return;
-      // 5 nm smooth window handles 0.1 nm step noise; decimate to chart pixel width
-      const pts = smoothAndDecimate(raw, 5, cW).map(p=>[xP(p.wl),yP(p.ab)]);
-      s.appendChild(svgEl('path',{d:makePath(pts),fill:'none',stroke:SCAN_COLORS[i%SCAN_COLORS.length],strokeWidth:'1.5',strokeLinejoin:'round','stroke-linecap':'round'}));
-    });
+    // ── Layer 7: axis frame on top of data ────────────────────────────────
+    // Full-weight bottom and left
+    svg.appendChild(svgEl('line',{x1:PL,y1:PT+cH,x2:PL+cW,y2:PT+cH,stroke:axisColor,strokeWidth:'1.5'}));
+    svg.appendChild(svgEl('line',{x1:PL,y1:PT,    x2:PL,   y2:PT+cH,stroke:axisColor,strokeWidth:'1.5'}));
+    // Lighter top and right
+    svg.appendChild(svgEl('line',{x1:PL,y1:PT,x2:PL+cW,y2:PT,     stroke:axisColor,strokeWidth:'0.7',opacity:'0.3'}));
+    svg.appendChild(svgEl('line',{x1:PL+cW,y1:PT,x2:PL+cW,y2:PT+cH,stroke:axisColor,strokeWidth:'0.7',opacity:'0.3'}));
 
-    // ── Axis frame — solid box (OriginLab) ──────────────────────────────
-    // Bottom axis
-    s.appendChild(svgEl('line',{x1:PL,y1:PT+cH,x2:PL+cW,y2:PT+cH,stroke:axisColor,strokeWidth:'1.5'}));
-    // Left axis
-    s.appendChild(svgEl('line',{x1:PL,y1:PT,x2:PL,y2:PT+cH,stroke:axisColor,strokeWidth:'1.5'}));
-    // Top axis (lighter)
-    s.appendChild(svgEl('line',{x1:PL,y1:PT,x2:PL+cW,y2:PT,stroke:axisColor,strokeWidth:'1',opacity:'0.5'}));
-    // Right axis (lighter)
-    s.appendChild(svgEl('line',{x1:PL+cW,y1:PT,x2:PL+cW,y2:PT+cH,stroke:axisColor,strokeWidth:'1',opacity:'0.5'}));
-
-    // ── Tick marks — inward-pointing on bottom and left ─────────────────
-    curXTicks.forEach(v=>{
+    // ── Layer 8: tick marks ───────────────────────────────────────────────
+    xTicks.forEach(v=>{
       const x=xP(v).toFixed(1);
-      s.appendChild(svgEl('line',{x1:x,y1:PT+cH,x2:x,y2:(PT+cH+TICK_LEN).toFixed(1),stroke:tickColor,strokeWidth:'1.5'}));
-      s.appendChild(svgEl('line',{x1:x,y1:PT,x2:x,y2:(PT-MINOR_TICK).toFixed(1),stroke:tickColor,strokeWidth:'1',opacity:'0.4'}));
+      svg.appendChild(svgEl('line',{x1:x,y1:PT+cH,x2:x,y2:(PT+cH+TICK).toFixed(1),stroke:axisColor,strokeWidth:'1.2'}));
+      svg.appendChild(svgEl('line',{x1:x,y1:PT,x2:x,y2:(PT-mTICK).toFixed(1),stroke:axisColor,strokeWidth:'0.7',opacity:'0.3'}));
     });
-    curYTicks.forEach(v=>{
+    yTicks.forEach(v=>{
       const y=yP(v).toFixed(1);
-      s.appendChild(svgEl('line',{x1:PL,y1:y,x2:(PL-TICK_LEN).toFixed(1),y2:y,stroke:tickColor,strokeWidth:'1.5'}));
-      s.appendChild(svgEl('line',{x1:PL+cW,y1:y,x2:(PL+cW+MINOR_TICK).toFixed(1),y2:y,stroke:tickColor,strokeWidth:'1',opacity:'0.4'}));
+      svg.appendChild(svgEl('line',{x1:PL,y1:y,x2:(PL-TICK).toFixed(1),y2:y,stroke:axisColor,strokeWidth:'1.2'}));
+      svg.appendChild(svgEl('line',{x1:PL+cW,y1:y,x2:(PL+cW+mTICK).toFixed(1),y2:y,stroke:axisColor,strokeWidth:'0.7',opacity:'0.3'}));
     });
 
-    // ── Axis tick labels ─────────────────────────────────────────────────
-    curXTicks.forEach(v=>s.appendChild(svgEl('text',{
-      x:(xP(v)-20).toFixed(1),y:(PT+cH+TICK_LEN+13).toFixed(1),
-      fill:labelColor,fontSize:'9',textAnchor:'middle',
-      'font-family':'Inter,system-ui,sans-serif','font-weight':'400'
-    },String(Math.round(v*10)/10))));
-    curYTicks.forEach(v=>{
-      const t=typeof v==='number'&&v%1!==0?(Math.abs(v)<0.01?v.toFixed(4):v.toFixed(3)):String(v);
-      s.appendChild(svgEl('text',{
-        x:(PL-TICK_LEN-7).toFixed(1),y:(yP(v)+3.5).toFixed(1),
-        fill:labelColor,fontSize:'8.5',textAnchor:'end',
-        'font-family':'Inter,system-ui,sans-serif','font-weight':'400'
-      },t));
+    // ── Layer 9: tick labels ──────────────────────────────────────────────
+    // X labels — centred under tick, clear of axis line
+    xTicks.forEach(v=>{
+      svg.appendChild(svgEl('text',{
+        x:xP(v).toFixed(1), y:(PT+cH+TICK+13).toFixed(1),
+        fill:tickLblColor,fontSize:'10',textAnchor:'middle',
+        'font-family':'Inter,system-ui,sans-serif'
+      },String(Math.round(v))));
+    });
+    // Y labels — right-aligned, vertically centred on tick
+    yTicks.forEach(v=>{
+      const fmt=isNormalized
+        ?(v===0?'0':v===1?'1.0':v.toFixed(1))
+        :(v%1!==0?(Math.abs(v)<0.01?v.toFixed(4):v.toFixed(3)):String(v));
+      svg.appendChild(svgEl('text',{
+        x:(PL-TICK-6).toFixed(1), y:(yP(v)+3.5).toFixed(1),
+        fill:tickLblColor,fontSize:'9.5',textAnchor:'end',
+        'font-family':'Inter,system-ui,sans-serif'
+      },fmt));
     });
 
-    // ── Axis titles ───────────────────────────────────────────────────────
-    s.appendChild(svgEl('text',{
-      x:(PL+cW/2).toFixed(1),y:(H-8).toFixed(1),
-      fill:axisTitleColor,fontSize:'10',textAnchor:'middle',
+    // ── Layer 10: 280nm label — sits in top margin, never over data ────────
+    if(wl0<=280&&wl1>=280){
+      svg.appendChild(svgEl('text',{
+        x:xP(280).toFixed(1), y:(PT-8).toFixed(1),
+        fill:annotColor,fontSize:'8.5',textAnchor:'middle',opacity:'0.8',
+        'font-family':'Inter,sans-serif','font-weight':'500'
+      },'280 nm'));
+    }
+
+    // ── Layer 11: axis titles ─────────────────────────────────────────────
+    // X title — centred, below tick labels with breathing room
+    svg.appendChild(svgEl('text',{
+      x:(PL+cW/2).toFixed(1), y:(H-7).toFixed(1),
+      fill:titleColor,fontSize:'11',textAnchor:'middle',
       'font-family':'Inter,system-ui,sans-serif','font-weight':'500'
     },'Wavelength (nm)'));
-    // Y title centred in left margin (PL=90, so pivot at x=14 gives full label room)
-    s.appendChild(svgEl('text',{
-      x:'10',y:(PT+cH/2).toFixed(1),
-      fill:axisTitleColor,fontSize:'10',textAnchor:'middle',
-      'font-family':'Inter,system-ui,sans-serif','font-weight':'500',
-      transform:`rotate(-90,10,${(PT+cH/2).toFixed(1)})`
-    },'Absorbance (AU)'));
 
-    return s;
+    // Y title — rotated -90°, pivoted at x=11 (well inside the 72px left margin)
+    // Tick labels end at PL-TICK-6 = 61px; title at x=11 gives 50px clear gap
+    const yMid=(PT+cH/2).toFixed(1);
+    svg.appendChild(svgEl('text',{
+      x:'11', y:yMid,
+      fill:titleColor,fontSize:'11',textAnchor:'middle',
+      'font-family':'Inter,system-ui,sans-serif','font-weight':'500',
+      transform:`rotate(-90,11,${yMid})`
+    },isNormalized?'Normalized Absorbance':'Absorbance (AU)'));
+
+    return svg;
   }
 
   // ── Zoom state ───────────────────────────────────────────────────────────
@@ -3020,8 +3273,43 @@ function buildSpectrumChart(scans,title,useLotLabel){
 // ============================================================================
 // LONGITUDINAL CHART (SVG) — Clean scientific style
 // ============================================================================
-function buildLongChart(scans,metric,label,unit,color,coaOd){
-  const data=scans.filter(s=>getAn(s,coaOd)&&getAn(s,coaOd)[metric]!=null).map(s=>({date:s.date,scanLabel:s.scanLabel||null,v:getAn(s,coaOd)[metric]}));
+function buildLongChart(scans,metric,label,unit,color,coaOd,forceCorrect){
+  // forceCorrect=true  → always use dilution-corrected analysis (absolute AU metrics)
+  // forceCorrect=false → always use raw measured analysis (ratio/shape metrics)
+  // forceCorrect=undefined → respect the global S.absMode toggle (legacy behaviour)
+  function getAnFor(s){
+    const df=Number(s.dil)||1;
+    if(forceCorrect===true){
+      // Always dilution-corrected, regardless of S.absMode
+      // Also apply stale-cache detection: if anC.maxAb ≈ an.maxAb but dil>1, it was never corrected
+      if(s.anC && df>1 && s.an && s.anC.maxAb!=null && s.an.maxAb!=null){
+        if(s.anC.maxAb/s.an.maxAb < 1.5){
+          const d=(s.raw||[]).map(p=>({wl:p.wl,ab:p.ab*df}));
+          s.anC=Analytics.analyze(d,(s._lotSize||0)||0,coaOd);
+        }
+      }
+      if(s.anC){
+        if(s.anC.odRatio==null&&s.raw) s.anC.odRatio=Analytics.computeOdRatio(s.raw.map(p=>({wl:p.wl,ab:p.ab*df})));
+        return s.anC;
+      }
+      const d=(s.raw||[]).map(p=>({wl:p.wl,ab:p.ab*df}));
+      s.anC=Analytics.analyze(d,(s._lotSize||0)||0,coaOd);
+      return s.anC;
+    }
+    if(forceCorrect===false){
+      // Always raw/measured — ratio & shape metrics are dilution-independent
+      if(s.an){
+        if(s.an.odRatio==null&&s.raw) s.an.odRatio=Analytics.computeOdRatio(s.raw);
+        return s.an;
+      }
+      // Fallback: compute from raw if an is missing
+      if(s.raw&&s.raw.length){ s.an=Analytics.analyze(s.raw,(s._lotSize||0)||0,coaOd); return s.an; }
+      return null;
+    }
+    // undefined → respect global toggle
+    return getAn(s,coaOd);
+  }
+  const data=scans.filter(s=>{const a=getAnFor(s);return a&&a[metric]!=null;}).map(s=>({date:s.date,scanLabel:s.scanLabel||null,v:getAnFor(s)[metric]}));
   if(data.length<2)return null;
 
   // ╔══════════════════════════════════════════════════════════╗
@@ -3029,11 +3317,11 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
   // ╠══════════════════════════════════════════════════════════╣
   const CHART_WIDTH       = 620;  // overall chart width  (px inside SVG viewBox)
   const CHART_HEIGHT      = 350;  // overall chart height (px inside SVG viewBox)
-  const MARGIN_LEFT       = 58;   // left margin — increase if Y tick labels get cut off
+  const MARGIN_LEFT       = 68;   // left margin — wide enough for tick labels + rotated Y title
   const MARGIN_RIGHT      = 58;   // right margin — increase if latest value gets cut off
   const MARGIN_TOP        = 65;   // top margin  — room for the chart title + latest value
   const MARGIN_BOTTOM     = 50;   // bottom margin — room for X tick labels + "Date" title
-  const Y_TITLE_X         = 40;    // X position of the rotated Y-axis label (increase = moves RIGHT toward axis)
+  const Y_TITLE_X         = 13;   // X position of the rotated Y-axis label pivot (keep near left edge)
   const Y_TITLE_FONT      = 9;    // font size of the rotated Y-axis label
   const TICK_LABEL_FONT   = 13;    // font size of Y tick number labels
   const CHART_TITLE_FONT  = 30;   // font size of the bold chart title (λ Max, Max OD, etc.)
@@ -3093,7 +3381,7 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
   const yPrec=yRange<0.001?4:yRange<0.01?3:yRange<0.1?2:yRange<10?2:yRange<100?1:0;
 
   // ── SVG ─────────────────────────────────────────────────────────────────
-  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,style:'width:100%;display:block;overflow:hidden'});
+  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,style:'width:100%;display:block;overflow:visible'});
   const defs=svgEl('defs',{});
 
   // Area gradient
@@ -3116,12 +3404,16 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
   const labelMap={
     'λ max (Peak Wavelength)':'λ Max',
     'Max Absorbance (OD)':'Max OD',
+    'OD Ratio 550:700 — Primary Aggregation Metric':'OD Ratio 550:700',
     'FWHM':'FWHM',
     'Peak:Trough Ratio at 480nm':'Peak : Trough',
+    'Peak:Trough Ratio at 480nm (secondary)':'P:T Ratio',
     'Long-Wavelength Tail (700–900nm)':'700–900 nm Tail',
     '280nm Protein Abs':'280 nm Protein',
   };
   const displayLabel=labelMap[label]||label;
+  // Small correction-mode badge appended below the title
+  const corrBadge = forceCorrect===true ? ' ⚡dil-corrected' : forceCorrect===false ? '' : '';
 
   // Title — bold, left-aligned flush with Y axis
   svg.appendChild(svgEl('text',{
@@ -3129,6 +3421,19 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
     fill:isLight?'#111':'#E2EAF4',fontSize:String(CHART_TITLE_FONT),fontWeight:'700',textAnchor:'start',
     'font-family':'Inter,system-ui,sans-serif','letter-spacing':'0.01em'
   },displayLabel));
+
+  // Correction badge — inline to the right of the title, smaller font
+  if(corrBadge){
+    // Estimate title pixel width at CHART_TITLE_FONT size (~0.58 ch/px ratio for bold Inter)
+    const approxTitleW = displayLabel.length * CHART_TITLE_FONT * 0.58;
+    svg.appendChild(svgEl('text',{
+      x:(PL + approxTitleW + 8).toFixed(1), y:CHART_TITLE_Y.toFixed(1),
+      fill:isLight?'rgba(224,148,60,0.85)':'rgba(224,148,60,0.75)',
+      fontSize:'11', textAnchor:'start',
+      'font-family':'Inter,system-ui,sans-serif','font-weight':'500',
+      'dominant-baseline':'auto'
+    },corrBadge));
+  }
 
   // Latest value — right-aligned to W-PR so it stays inside the viewBox
   svg.appendChild(svgEl('text',{
@@ -3193,9 +3498,18 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
 
   // ── Y axis title (rotated) — close to the Y axis line ───────────────────
   const yMid=(PT+cH/2).toFixed(1);
-  const yAxisLbl=unit||label.replace(/\(.*\)/,'').replace('Peak Wavelength','λ max')
-    .replace('Max Absorbance','OD').replace('Long-Wavelength Tail','Tail')
-    .replace('Peak:Trough Ratio at 480nm','P:T').replace('Protein Abs','280nm').trim();
+  const yAxisLbl=unit||label
+    .replace(' — Primary Aggregation Metric','')
+    .replace(' — primary aggregation metric','')
+    .replace(/\(.*\)/,'')
+    .replace('Peak Wavelength','λ max')
+    .replace('Max Absorbance','Max OD')
+    .replace('Long-Wavelength Tail \(700–900nm\)','Tail (700–900nm)')
+    .replace('Long-Wavelength Tail','Tail')
+    .replace('Peak:Trough Ratio at 480nm (secondary)','P:T (secondary)')
+    .replace('Peak:Trough Ratio at 480nm','P:T')
+    .replace('Protein Abs','280nm Abs')
+    .trim();
   svg.appendChild(svgEl('text',{
     x:String(Y_TITLE_X),y:yMid,
     fill:titC,fontSize:String(Y_TITLE_FONT),textAnchor:'middle','font-weight':'500',
@@ -3380,10 +3694,14 @@ function buildReport(lot){
     sigEls.push(mkSig('Peak Drift',drift!=null?fmt(drift,1,' nm'):'—',drift==null?'Need ≥2 scans':drift>5?'Critical red-shift':drift>3?'Moderate — monitor':'Within tolerance',drift==null?'neutral':sigClass(drift,3,5)));
     const broad=hasSignals?(qc.broad||0):null;
     sigEls.push(mkSig('FWHM Broadening',broad!=null?fmt(broad,1,' nm'):'—',broad==null?'Need ≥2 scans':broad>15?'Strong aggregation indicator':broad>8?'Moderate broadening':'Minimal change',broad==null?'neutral':sigClass(broad,8,15)));
-    const ptLast=aLast.peakTrough;
-    sigEls.push(mkSig('P:T Ratio',ptLast?ptLast.toFixed(2):'—',ptLast==null?'No data':ptLast>=2.5?'Excellent monodispersity':ptLast>=1.5?'Acceptable':'Low — aggregates at 480nm',ptLast==null?'neutral':ptColorCls(ptLast)));
+    const ratioLast=aLast.odRatio;
+    const ratioDrop=hasSignals?(qc.ratioDrop||0):null;
+    sigEls.push(mkSig('OD 550:700 Ratio ★',ratioLast!=null?ratioLast.toFixed(2):'—',ratioLast==null?'No data':ratioLast>=4?'Excellent — stable':ratioLast>=2.5?'Declining — monitor':'Low — aggregation likely',ratioLast==null?'neutral':ratioLast>=4?'ok':ratioLast>=2.5?'warn':'danger'));
+    sigEls.push(mkSig('550:700 Drop',ratioDrop!=null?fmt(ratioDrop,3,''):'—',ratioDrop==null?'Need ≥2 scans':ratioDrop>1.5?'Primary signal — significant ratio decline':ratioDrop>0.5?'Ratio declining':'Stable',ratioDrop==null?'neutral':sigClass(ratioDrop,0.5,1.5)));
     const tailRise=hasSignals?(qc.tailRise||0):null;
-    sigEls.push(mkSig('Tail Elevation',tailRise!=null?fmt(tailRise,5,' AU'):'—',tailRise==null?'Need ≥2 scans':tailRise>0.02?'Aggregate scatter present':tailRise>0.005?'Slight elevation':'Baseline stable',tailRise==null?'neutral':sigClass(tailRise,0.005,0.02)));
+    sigEls.push(mkSig('Tail Elevation ★',tailRise!=null?fmt(tailRise,5,' AU'):'—',tailRise==null?'Need ≥2 scans':tailRise>0.02?'Primary signal — aggregate scatter':tailRise>0.005?'Slight elevation':'Baseline stable',tailRise==null?'neutral':sigClass(tailRise,0.005,0.02)));
+    const ptLast=aLast.peakTrough;
+    sigEls.push(mkSig('P:T Ratio (2nd)',ptLast?ptLast.toFixed(2):'—',ptLast==null?'No data':ptLast>=2.5?'Good':ptLast>=1.5?'Acceptable':'Low — check 550:700',ptLast==null?'neutral':ptColorCls(ptLast)));
     const odPct=aLast.odPctChange;
     sigEls.push(mkSig('ΔOD vs CoA',odPct!=null?fmtSign(odPct,1,'%'):'—',odPct==null?'CoA OD not set':Math.abs(odPct)>20?'Significant OD change':Math.abs(odPct)>10?'Moderate OD shift':'Consistent with CoA',odPct==null?'neutral':odPctColor(odPct)));
     const fwhmLast=aLast.fwhm;
@@ -3506,13 +3824,13 @@ function buildReport(lot){
     } else if(qc.status==='Drifting'){
       if(qc.drift>3)interp.push('Peak drift: '+qc.drift.toFixed(1)+' nm (warn >3 nm). May indicate early-stage aggregation or surface modification.');
       if(qc.broad>8)interp.push('FWHM broadened +'+qc.broad.toFixed(1)+' nm. Increasing polydispersity.');
-      if(qc.ptDrop>0.5&&aLast&&aLast.peakTrough)interp.push('P:T ratio declined to '+aLast.peakTrough.toFixed(2)+'. Dimers or small aggregates likely.');
+      if(qc.ratioDrop>0.5)interp.push('OD 550:700 ratio dropped by '+qc.ratioDrop.toFixed(2)+'. Aggregate population growing.');
       if(qc.tailRise>0.005)interp.push('700–900nm tail +'+qc.tailRise.toFixed(5)+' AU. Aggregate scatter signature.');
       interp.push('Recommendation: Reduce re-scan interval. Confirm with DLS/TEM. Restrict to non-critical applications.');
     } else if(qc.status==='Aggregating'){
       if(qc.drift>5)interp.push('Peak drift '+qc.drift.toFixed(1)+' nm (danger >5 nm). Coupled plasmon resonance from large aggregates.');
       if(qc.broad>15)interp.push('FWHM +'+qc.broad.toFixed(1)+' nm. Severely heterogeneous size distribution.');
-      if(qc.ptDrop>1)interp.push('P:T drop '+qc.ptDrop.toFixed(2)+'. Aggregate-dominated sample.');
+      if(qc.ratioDrop>1.5)interp.push('OD 550:700 ratio dropped by '+qc.ratioDrop.toFixed(2)+'. Primary aggregation signal — significant particle loss at 550nm.');
       interp.push('Recommendation: Quarantine immediately. Do not use. Request replacement lot and perform DLS/TEM characterization.');
     }
   } else {
@@ -4465,7 +4783,7 @@ function buildConjugates(){
         if(an.peakWl)kpis.push({k:'λ max',v:an.peakWl+' nm',c:'var(--gold)'});
         if(an.maxAb!=null)kpis.push({k:'Abs',v:an.maxAb+' AU',c:'var(--text)'});
         if(an.fwhm)kpis.push({k:'FWHM',v:an.fwhm+' nm',c:'var(--purple)'});
-        if(an.peakTrough)kpis.push({k:'P:T',v:an.peakTrough.toFixed(2),c:qcPtC});
+        if(an.odRatio!=null)kpis.push({k:'OD 550:700',v:an.odRatio.toFixed(2),c:an.odRatio>=4?'var(--green)':an.odRatio>=2.5?'var(--amber)':'var(--red)'});
         if(an.protein280>0.01)kpis.push({k:'280nm',v:an.protein280.toFixed(4),c:'var(--blue)'});
 
         const kpiFooter=el('div',{style:{display:'flex',alignItems:'center',borderTop:'1px solid var(--border)'}},
@@ -4596,8 +4914,8 @@ function buildSettings(){
         el('div',{class:'srule'},el('span',{class:'srule-txt'},'QC Thresholds — Peak:Trough Ratio Drop'),el('div',{class:'srule-line'})),
         el('div',{style:{padding:'0 0 8px 0',color:'var(--text-3)',fontSize:'12px'}},'Tracks the ratio of SPR peak to abs@480nm. A drop indicates aggregates absorbing at 480nm. Gold standard for stable 40–80nm AuNPs: ≥2.5'),
         el('div',{class:'settings-grid'},
-          numField('P:T drop warning','Ratio drop to flag as Drifting (recommend: 0.5)','ptDropWarn','0.1','5','0.1'),
-          numField('P:T drop danger','Ratio drop to flag as Aggregating (recommend: 1.0)','ptDropDanger','0.2','10','0.1'),
+          numField('OD 550:700 drop warning','Ratio drop to flag as Drifting (recommend: 0.5)','ratioDropWarn','0.1','5','0.1'),
+          numField('OD 550:700 drop danger','Ratio drop to flag as Aggregating (recommend: 1.5)','ratioDropDanger','0.2','10','0.1'),
         ),
         el('div',{class:'srule'},el('span',{class:'srule-txt'},'QC Thresholds — Long-Wavelength Tail (700–900nm)'),el('div',{class:'srule-line'})),
         el('div',{style:{padding:'0 0 8px 0',color:'var(--text-3)',fontSize:'12px'}},'Elevated baseline at 700–900nm indicates scatter from aggregates. Stable particles typically show a very low, flat baseline in this region.'),
@@ -4891,6 +5209,13 @@ function buildEditScanModal(){
     el('button',{class:'btn btn-ghost',onClick:()=>setState({modal:null,editScan:null})},'Cancel'),
     el('button',{class:'btn btn-primary',onClick:()=>{
       const update={date:f.date,op:f.op,dil:Number(f.dil)||1,notes:f.notes,description:f.description||'',scanType:f.scanType,diluent:f.diluent,measureMode:f.measureMode,sampleVolume:f.sampleVolume};
+      // Recompute an + anC whenever dil changes — stale cached anC is the most common
+      // cause of a diluted scan not correcting properly in dilution-corrected view.
+      if(scan.raw && scan.raw.length){
+        const df = Number(f.dil)||1;
+        update.an  = Analytics.analyze(scan.raw, lot.size, lot.od);
+        update.anC = Analytics.analyze(scan.raw.map(p=>({wl:p.wl,ab:p.ab*df})), lot.size, lot.od);
+      }
       // If post-conj, update or create conjugate fields
       if(f.scanType==='post-conjugation'){
         const existingConj=scan.conj||{};
