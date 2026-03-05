@@ -931,6 +931,64 @@ body.light .conj-box{border-color:rgba(42,127,192,0.3);background:rgba(42,127,19
 .delta-animate{animation:deltaFadeIn 0.4s ease both;}
 @keyframes arrowPulse{0%,100%{transform:translateX(0)}50%{transform:translateX(3px)}}
 .arrow-anim{display:inline-block;animation:arrowPulse 1.5s ease-in-out infinite;}
+
+/* ── Custom gold checkboxes ── */
+.cb-gold{
+  appearance:none;-webkit-appearance:none;
+  width:18px;height:18px;min-width:18px;
+  background:var(--surface);
+  border:1.5px solid rgba(200,168,75,0.5);
+  border-radius:4px;
+  cursor:pointer;
+  position:relative;
+  transition:background 0.15s, border-color 0.15s;
+  vertical-align:middle;
+  flex-shrink:0;
+}
+.cb-gold:hover{border-color:var(--gold);}
+.cb-gold:checked{
+  background:var(--gold);
+  border-color:var(--gold);
+}
+.cb-gold:checked::after{
+  content:'';
+  position:absolute;
+  left:4px;top:1px;
+  width:6px;height:10px;
+  border:2px solid #1A1200;
+  border-top:none;border-left:none;
+  transform:rotate(45deg);
+}
+.cb-gold:indeterminate{
+  background:rgba(200,168,75,0.25);
+  border-color:var(--gold);
+}
+.cb-gold:indeterminate::after{
+  content:'';
+  position:absolute;
+  left:3px;top:7px;
+  width:10px;height:2px;
+  background:var(--gold);
+  border-radius:1px;
+}
+
+/* ── Scan history filter bar ── */
+.scan-filter-bar{
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+  padding:10px 20px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.scan-filter-bar select,.scan-filter-bar input{
+  background:var(--panel);border:1px solid var(--border);
+  color:var(--text);border-radius:4px;padding:4px 8px;
+  font-size:11.5px;font-family:var(--mono);
+  cursor:pointer;min-width:90px;
+}
+.scan-filter-bar select:focus,.scan-filter-bar input:focus{outline:none;border-color:var(--gold);}
+.scan-filter-lbl{font-size:11px;color:'var(--text-3)';white-space:nowrap;}
+.scan-filter-clear{font-size:11px;color:var(--text-3);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:3px;font-family:var(--mono);}
+.scan-filter-clear:hover{color:var(--red);}
+
 </style>
 </head>
 <body>
@@ -1465,7 +1523,7 @@ function linTicks(mn,mx){
 // ============================================================================
 // STATE
 // ============================================================================
-const S={view:'dashboard',lot:null,modal:null,search:'',compare:[],compareSearch:'',absMode:'measured',editScan:null};
+const S={view:'dashboard',lot:null,modal:null,search:'',compare:[],compareSearch:'',compareScanChecks:{},detailScanSel:{},scanFilters:{},absMode:'measured',editScan:null};
 function setState(p){Object.assign(S,p);render();}
 
 function getAn(scan,coaOd){
@@ -1747,21 +1805,83 @@ function buildDetail(){
     {v:scans.length,k:'Scans',c:'var(--text-2)',tt:'Total QC checks recorded'},
   ]:[];
 
+  // ── Scan history filters ─────────────────────────────────────────────────
+  const scanFilters = S.scanFilters && S.scanFilters[lot.id] ? S.scanFilters[lot.id] : {};
+  const fDate     = scanFilters.date     || '';
+  const fOperator = scanFilters.operator || '';
+  const fType     = scanFilters.type     || '';
+  const fDil      = scanFilters.dil      || '';
+  const fDiluent  = scanFilters.diluent  || '';
+
+  function setScanFilter(key, val) {
+    setState({ scanFilters: Object.assign({}, S.scanFilters, { [lot.id]: Object.assign({}, scanFilters, { [key]: val }) }) });
+  }
+  function clearScanFilters() {
+    setState({ scanFilters: Object.assign({}, S.scanFilters, { [lot.id]: {} }) });
+  }
+
+  const hasFilters = fDate || fOperator || fType || fDil || fDiluent;
+
+  // All unique values for dropdowns
+  const allOperators = [...new Set(scans.map(s => s.op).filter(Boolean))].sort();
+  const allTypes     = [...new Set(scans.map(s => s.scanType || 'stability'))].sort();
+  const allDils      = [...new Set(scans.map(s => String(s.dil)).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
+  const allDiluents  = [...new Set(scans.map(s => s.diluent).filter(Boolean))].sort();
+
+  // Apply filters
+  let filteredScans = scans.filter(s => {
+    if (fOperator && (s.op || '') !== fOperator) return false;
+    if (fType     && (s.scanType || 'stability') !== fType) return false;
+    if (fDil      && String(s.dil) !== fDil) return false;
+    if (fDiluent  && (s.diluent || '') !== fDiluent) return false;
+    return true;
+  });
+  if (fDate === 'newest') filteredScans = [...filteredScans].reverse();
+  // fDate === 'oldest' keeps default ascending order
+
   // ── Scan history table ───────────────────────────────────────────────────
+  // selectedScanIds: set of scan IDs to show on the chart (default: all)
+  const selScanIds = S.detailScanSel && S.detailScanSel[lot.id]
+    ? new Set(S.detailScanSel[lot.id])
+    : new Set(scans.map(s => s.id));
+
+  function toggleScan(sid) {
+    const next = new Set(selScanIds);
+    if (next.has(sid)) { next.delete(sid); } else { next.add(sid); }
+    setState({ detailScanSel: Object.assign({}, S.detailScanSel, { [lot.id]: [...next] }) });
+  }
+  function clearAllScans() {
+    setState({ detailScanSel: Object.assign({}, S.detailScanSel, { [lot.id]: [] }) });
+  }
+  function selectAllScans() {
+    setState({ detailScanSel: Object.assign({}, S.detailScanSel, { [lot.id]: scans.map(s => s.id) }) });
+  }
+
+  const visibleScans = scans.filter(s => selScanIds.has(s.id));
+
   const scanRows=el('tbody',{});
-  scans.forEach(s=>{
+  filteredScans.forEach(s=>{
     const a=getAn(s,lot.od)||{};
     const shColor=Math.abs(a.shift||0)>1?'var(--amber)':'var(--green)';
     const ptC=ptColor(a.peakTrough);
     const tailC=tailColor(a.tail);
     const odC=odPctColor(a.odPctChange);
+    const checked = selScanIds.has(s.id);
+    const scanColor = SCAN_COLORS[scans.indexOf(s) % SCAN_COLORS.length];
     const stBadge=s.scanType==='post-conjugation'?el('span',{class:'badge',style:{color:'var(--blue)',background:'rgba(74,159,224,0.12)',border:'1px solid rgba(74,159,224,0.25)',fontSize:'10px'}},'post-conj'):
                   s.scanType==='pre-conjugation'?el('span',{class:'badge',style:{color:'var(--purple)',background:'rgba(155,111,224,0.12)',border:'1px solid rgba(155,111,224,0.25)',fontSize:'10px'}},'pre-conj'):
                   el('span',{class:'badge',style:{color:'var(--text-3)',background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',fontSize:'10px'}},'stability');
+    // Checkbox cell
+    const cbWrap = el('td',{style:{paddingLeft:'14px',paddingRight:'6px',width:'28px'}});
+    const cb = el('input',{type:'checkbox',class:'cb-gold',style:{cursor:'pointer'}});
+    cb.checked = checked;
+    cb.addEventListener('change', () => toggleScan(s.id));
+    cbWrap.appendChild(cb);
     scanRows.appendChild(el('tr',{},
+      cbWrap,
       el('td',{style:{fontFamily:'var(--mono)',fontSize:'12px'}},fmtDate(s.date)),
-      el('td',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--gold)',letterSpacing:'0.04em',whiteSpace:'nowrap'}},s.scanLabel||'—'),
-      el('td',{style:{fontSize:'12px',color:'var(--text)',maxWidth:'150px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},s.description||'—'),
+      el('td',{style:{fontFamily:'var(--mono)',fontSize:'11px',color:scanColor,letterSpacing:'0.04em',whiteSpace:'nowrap'}},s.scanLabel||'—'),
+      el('td',{style:{fontSize:'12px',color:'var(--text)',maxWidth:'180px',whiteSpace:'normal',wordBreak:'break-word',lineHeight:'1.4'}},s.description||'—'),
       el('td',{style:{fontFamily:'var(--mono)'}},s.op||'—'),
       el('td',{},
         el('div',{style:{display:'flex',flexDirection:'column',gap:'3px'}},
@@ -1774,7 +1894,6 @@ function buildDetail(){
         )
       ),
       el('td',{style:{fontSize:'12px',color:'var(--text-2)'}},s.diluent||'—'),
-      
       el('td',{style:{fontFamily:'var(--mono)'}},s.dil+'×'),
       el('td',{style:{fontFamily:'var(--mono)',color:'var(--gold)',fontWeight:'500'}},a.peakWl||'—'),
       el('td',{style:{fontFamily:'var(--mono)'}},a.maxAb||'—'),
@@ -1876,7 +1995,7 @@ function buildDetail(){
     ):'',
 
     buildQcInterpretation(),
-    scans.length?buildSpectrumChart(scans,'UV-Vis Absorbance Overlay'+(S.absMode==='corrected'?' — Dilution-Corrected':''),false):'',
+    scans.length?buildSpectrumChart(visibleScans.length ? visibleScans : scans,'UV-Vis Absorbance Overlay'+(S.absMode==='corrected'?' — Dilution-Corrected':''),false):'',
     scans.length>=2?(()=>{
       // Collect only charts that have data (buildLongChart returns null if <2 points)
       const charts=[];
@@ -1936,11 +2055,58 @@ function buildDetail(){
     el('div',{class:'pnl'},
       el('div',{class:'pnl-head'},
         el('span',{class:'pnl-title'},'Scan History'),
-        el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},scans.length+' QC check'+(scans.length!==1?'s':''))
+        el('div',{style:{display:'flex',gap:'8px',alignItems:'center'}},
+          el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},
+            filteredScans.length !== scans.length ? filteredScans.length+' of '+scans.length+' scans · ' : scans.length+' scans · ',
+            visibleScans.length+' on graph'
+          ),
+          visibleScans.length < scans.length ? el('button',{class:'btn btn-ghost btn-sm',style:{color:'var(--red)',borderColor:'rgba(224,92,92,0.3)'},onClick:clearAllScans},'Clear all') : null
+        )
       ),
+      // Filter bar
+      (()=>{
+        const mkSelect = (placeholder, value, options, key) => {
+          const sel = el('select', {style:{background:'var(--panel)',border:'1px solid var(--border)',color: value ? 'var(--text)' : 'var(--text-3)',borderRadius:'4px',padding:'4px 8px',fontSize:'11.5px',fontFamily:'var(--mono)',cursor:'pointer',minWidth:'90px'}});
+          if (value && !options.includes(value)) options = [value, ...options];
+          const defOpt = document.createElement('option'); defOpt.value=''; defOpt.textContent=placeholder; defOpt.style.color='var(--text-3)';
+          sel.appendChild(defOpt);
+          options.forEach(o => { const opt=document.createElement('option'); opt.value=o; opt.textContent=o; if(o===value)opt.selected=true; sel.appendChild(opt); });
+          sel.addEventListener('change', e => setScanFilter(key, e.target.value));
+          if (value) sel.style.borderColor='rgba(200,168,75,0.5)';
+          return sel;
+        };
+        const dateSortSel = el('select',{style:{background:'var(--panel)',border: fDate?'1px solid rgba(200,168,75,0.5)':'1px solid var(--border)',color:fDate?'var(--text)':'var(--text-3)',borderRadius:'4px',padding:'4px 8px',fontSize:'11.5px',fontFamily:'var(--mono)',cursor:'pointer',minWidth:'110px'}});
+        [{v:'',t:'Date'},{v:'newest',t:'Newest first'},{v:'oldest',t:'Oldest first'}].forEach(({v,t})=>{
+          const o=document.createElement('option');o.value=v;o.textContent=t;if(v===fDate)o.selected=true;dateSortSel.appendChild(o);
+        });
+        dateSortSel.addEventListener('change',e=>setScanFilter('date',e.target.value));
+
+        const filterBar = el('div',{class:'scan-filter-bar'},
+          el('span',{style:{fontSize:'11px',color:'var(--text-3)',whiteSpace:'nowrap',fontFamily:'var(--mono)'}},'Filter:'),
+          dateSortSel,
+          mkSelect('Operator', fOperator, allOperators, 'operator'),
+          mkSelect('Scan Type', fType, allTypes, 'type'),
+          mkSelect('Dil.', fDil, allDils, 'dil'),
+          mkSelect('Diluent', fDiluent, allDiluents, 'diluent'),
+          hasFilters ? el('button',{class:'scan-filter-clear',onClick:clearScanFilters},'✕ Clear filters') : null
+        );
+        return filterBar;
+      })(),
       el('div',{class:'tbl-wrap'},
         el('table',{},
-          el('thead',{},el('tr',{},...'Date,Scan ID,Description,Operator,Scan Type,Diluent,Dil.,λ max,Abs max,ΔOD%,FWHM,P:T,Tail,280nm,Δ Theor.,Notes,'.split(',').map(h=>el('th',{},h)))),
+          (()=>{
+            const allChecked = visibleScans.length === scans.length;
+            const headerCb = el('input',{type:'checkbox',class:'cb-gold',title:'Select / deselect all'});
+            headerCb.checked = allChecked;
+            headerCb.indeterminate = visibleScans.length > 0 && visibleScans.length < scans.length;
+            headerCb.addEventListener('change', () => allChecked ? clearAllScans() : selectAllScans());
+            const cbTh = el('th',{style:{width:'28px',paddingLeft:'14px',paddingRight:'6px'}});
+            cbTh.appendChild(headerCb);
+            return el('thead',{},el('tr',{},
+              cbTh,
+              ...('Date,Scan ID,Description,Operator,Scan Type,Diluent,Dil.,λ max,Abs max,ΔOD%,FWHM,P:T,Tail,280nm,Δ Theor.,Notes,').split(',').filter(Boolean).map(h=>el('th',{},h))
+            ));
+          })(),
           scanRows
         )
       ),
@@ -1954,12 +2120,11 @@ function buildDetail(){
 // COMPARE
 // ============================================================================
 // ============================================================================
-// CURVE DELTA COMPARISON PANEL
+// CURVE DELTA COMPARISON PANEL — clean, consolidated
 // ============================================================================
 function buildDeltaComparison(chartScans, lots) {
   if (chartScans.length < 2) return null;
 
-  // Collect analytics for each scan
   const entries = chartScans.map((sc, i) => {
     const lot = lots.find(l => DB.getScans(l.id).find(s => s.id === sc.id));
     const an = getAn(sc, lot ? lot.od : 0);
@@ -1968,132 +2133,115 @@ function buildDeltaComparison(chartScans, lots) {
 
   if (entries.length < 2) return null;
 
-  // Use first scan as reference
   const ref = entries[0];
 
-  // KPI delta cards
   const metrics = [
-    { key: 'peakWl',    label: 'λ max',       unit: 'nm',  good: d => Math.abs(d) < 5,   warn: d => Math.abs(d) < 15, fmt: v => v ? v.toFixed(1) : '—' },
-    { key: 'maxAb',     label: 'Abs max',      unit: 'AU',  good: d => Math.abs(d) < 0.05,warn: d => Math.abs(d) < 0.15, fmt: v => v ? v.toFixed(4) : '—' },
-    { key: 'fwhm',      label: 'FWHM',         unit: 'nm',  good: d => Math.abs(d) < 5,   warn: d => Math.abs(d) < 15, fmt: v => v ? v.toFixed(1) : '—' },
-    { key: 'peakTrough',label: 'P:T Ratio',    unit: '',    good: d => Math.abs(d) < 0.2, warn: d => Math.abs(d) < 0.5, fmt: v => v ? v.toFixed(2) : '—' },
-    { key: 'tail',      label: 'Tail (700–900)',unit: 'AU', good: d => Math.abs(d) < 0.005,warn: d => Math.abs(d) < 0.02, fmt: v => v != null ? v.toFixed(4) : '—' },
-    { key: 'odPctChange',label: 'ΔOD%',        unit: '%',   good: d => Math.abs(d) < 5,   warn: d => Math.abs(d) < 15, fmt: v => v != null ? (v > 0 ? '+' : '') + v.toFixed(1) + '%' : '—' },
+    { key:'peakWl',     label:'λ max',      unit:'nm', dec:1, good:5,  warn:15,  higherBad:false },
+    { key:'maxAb',      label:'Abs max',     unit:'AU', dec:4, good:0.05,warn:0.15,higherBad:false },
+    { key:'fwhm',       label:'FWHM',        unit:'nm', dec:1, good:5,  warn:15,  higherBad:true  },
+    { key:'peakTrough', label:'P:T',         unit:'',   dec:2, good:0.2,warn:0.5, higherBad:true  },
+    { key:'tail',       label:'Tail',        unit:'AU', dec:4, good:0.005,warn:0.02,higherBad:true },
+    { key:'odPctChange',label:'ΔOD%',        unit:'%',  dec:1, good:5,  warn:15,  higherBad:false },
   ];
+
+  function fmtVal(v, dec, unit) {
+    if (v == null) return '—';
+    return v.toFixed(dec) + (unit ? '\u202f' + unit : '');
+  }
+  function deltaColor(absDelta, good, warn, delta, higherBad) {
+    if (absDelta < 0.000001) return 'var(--text-3)';
+    const bad = higherBad ? delta > 0 : false; // for fwhm/tail/pt, increase is bad
+    const isBad = absDelta >= warn;
+    const isWarn = absDelta >= good && absDelta < warn;
+    if (isBad) return 'var(--red)';
+    if (isWarn) return 'var(--amber)';
+    return 'var(--green)';
+  }
 
   const container = el('div', { class: 'delta-panel delta-animate' });
 
-  // Header
   const hdr = el('div', { class: 'delta-header' },
-    el('div', { class: 'delta-title' }, '📊 Curve Delta Analysis'),
-    el('div', { style: { fontSize: '12px', color: 'var(--text-3)' } },
+    el('div', { class: 'delta-title' }, 'Curve Comparison'),
+    el('div', { style:{ fontSize:'11px', color:'var(--text-3)' } },
       'Reference: ',
-      el('span', { style: { color: ref.color, fontFamily: 'var(--mono)', fontWeight: '600' } }, ref.label)
+      el('span', { style:{ color:ref.color, fontWeight:'600' } }, ref.label)
     )
   );
   container.appendChild(hdr);
 
-  const body = el('div', { class: 'delta-body' });
+  const body = el('div', { class:'delta-body', style:{ padding:'0' } });
 
-  // ── Per-comparison section ─────────────────────────────────────────────
+  // ── One compact table per comparison ──────────────────────────────────
   entries.slice(1).forEach((cmp, ci) => {
-    const secTitle = el('div', {
-      style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', marginTop: ci > 0 ? '24px' : '0' }
-    },
-      el('span', { style: { width: '12px', height: '12px', borderRadius: '50%', background: ref.color, display: 'inline-block', flexShrink: '0' } }),
-      el('span', { class: 'arrow-anim', style: { color: 'var(--text-3)', fontSize: '16px' } }, ' → '),
-      el('span', { style: { width: '12px', height: '12px', borderRadius: '50%', background: cmp.color, display: 'inline-block', flexShrink: '0' } }),
-      el('span', { style: { fontSize: '13px', fontWeight: '600', color: 'var(--text)' } }, ref.label + '  →  ' + cmp.label)
+    // Section divider for multiple comparisons
+    if (ci > 0) body.appendChild(el('div', { style:{ borderTop:'1px solid var(--border)', margin:'0' } }));
+
+    // Comparison label row
+    const cmpHdr = el('div', { style:{
+      display:'flex', alignItems:'center', gap:'8px',
+      padding:'12px 20px 8px', background:'var(--surface)'
+    }},
+      el('span', { style:{ width:'10px',height:'10px',borderRadius:'50%',background:ref.color,display:'inline-block',flexShrink:'0' } }),
+      el('span', { style:{ fontSize:'12px',color:'var(--text-2)' } }, ref.label),
+      el('span', { style:{ color:'var(--text-3)', fontSize:'13px', margin:'0 2px' } }, '→'),
+      el('span', { style:{ width:'10px',height:'10px',borderRadius:'50%',background:cmp.color,display:'inline-block',flexShrink:'0' } }),
+      el('span', { style:{ fontSize:'12px',fontWeight:'600',color:'var(--text)' } }, cmp.label)
     );
-    body.appendChild(secTitle);
+    body.appendChild(cmpHdr);
 
-    // KPI delta cards
-    const kpiRow = el('div', { class: 'delta-kpi-row' });
+    // Metrics table
+    const tbl = el('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:'12px' } });
+    const thead = el('thead',{}, el('tr',{},
+      el('th',{style:{padding:'7px 20px',textAlign:'left',color:'var(--text-3)',fontSize:'11px',fontWeight:'500',borderBottom:'1px solid var(--border)',width:'90px'}},'Metric'),
+      el('th',{style:{padding:'7px 12px',textAlign:'right',color:ref.color,fontSize:'11px',fontWeight:'500',borderBottom:'1px solid var(--border)'}},'Ref'),
+      el('th',{style:{padding:'7px 12px',textAlign:'right',color:cmp.color,fontSize:'11px',fontWeight:'500',borderBottom:'1px solid var(--border)'}},'Compare'),
+      el('th',{style:{padding:'7px 20px 7px 12px',textAlign:'right',color:'var(--text-3)',fontSize:'11px',fontWeight:'500',borderBottom:'1px solid var(--border)'}},'Change')
+    ));
+    tbl.appendChild(thead);
+
+    const tbody = el('tbody',{});
+    let rowIdx = 0;
     metrics.forEach(m => {
-      const refVal = ref.an[m.key];
-      const cmpVal = cmp.an[m.key];
-      if (refVal == null || cmpVal == null) return;
-      const delta = cmpVal - refVal;
-      const absDelta = Math.abs(delta);
-      const isGood = m.good(delta);
-      const isWarn = !isGood && m.warn(delta);
-      const color = isGood ? 'var(--green)' : isWarn ? 'var(--amber)' : 'var(--red)';
-      const arrow = delta > 0.0001 ? '↑' : delta < -0.0001 ? '↓' : '→';
-      const arrowColor = m.key === 'fwhm' || m.key === 'tail'
-        ? (delta > 0 ? 'var(--red)' : delta < 0 ? 'var(--green)' : 'var(--text-3)')
-        : color;
-      const pctChange = refVal !== 0 ? ((delta / Math.abs(refVal)) * 100).toFixed(1) : null;
+      const rv = ref.an[m.key], cv = cmp.an[m.key];
+      if (rv == null && cv == null) return;
+      const delta = (rv != null && cv != null) ? cv - rv : null;
+      const absDelta = delta != null ? Math.abs(delta) : null;
+      const dColor = delta != null ? deltaColor(absDelta, m.good, m.warn, delta, m.higherBad) : 'var(--text-3)';
+      const arrow = delta == null ? '' : absDelta < 0.000001 ? '=' : delta > 0 ? '↑' : '↓';
+      const pct = (delta != null && rv != null && Math.abs(rv) > 0.000001)
+        ? ((delta / Math.abs(rv)) * 100)
+        : null;
+      const changeStr = delta != null
+        ? (delta > 0 ? '+' : '') + delta.toFixed(m.dec) + (m.unit ? '\u202f' + m.unit : '') + (pct != null ? '  (' + (pct > 0 ? '+' : '') + pct.toFixed(1) + '%)' : '')
+        : '—';
 
-      const card = el('div', { class: 'delta-kpi', style: { borderTop: '2px solid ' + color } },
-        el('div', { class: 'delta-kpi-lbl' }, m.label),
-        el('div', { class: 'delta-kpi-val', style: { color } },
-          el('span', { class: 'delta-kpi-arrow', style: { color: arrowColor } }, arrow),
-          (delta > 0 ? '+' : '') + (Math.abs(delta) < 0.00001 ? '0' : m.fmt ? (delta > 0 ? '+' : '') + (m.key !== 'odPctChange' ? absDelta.toFixed(m.key === 'peakWl' || m.key === 'fwhm' ? 1 : 4) + (m.unit ? ' ' + m.unit : '') : absDelta.toFixed(1) + '%') : delta)
-        ),
-        el('div', { class: 'delta-kpi-sub' },
-          m.fmt(refVal) + ' → ' + m.fmt(cmpVal),
-          pctChange != null && m.key !== 'odPctChange' ? el('span', { style: { color, marginLeft: '6px' } }, '(' + (Number(pctChange) > 0 ? '+' : '') + pctChange + '%)') : null
+      const row = el('tr',{ style:{ background: rowIdx % 2 === 0 ? 'transparent' : 'var(--surface)' } },
+        el('td',{style:{padding:'8px 20px',color:'var(--text-2)',fontWeight:'500'}}, m.label + (m.unit ? ' ('+m.unit+')' : '')),
+        el('td',{style:{padding:'8px 12px',textAlign:'right',fontFamily:'var(--mono)',color:'var(--text-2)'}}, fmtVal(rv, m.dec, m.unit)),
+        el('td',{style:{padding:'8px 12px',textAlign:'right',fontFamily:'var(--mono)',color:'var(--text)'}}, fmtVal(cv, m.dec, m.unit)),
+        el('td',{style:{padding:'8px 20px 8px 12px',textAlign:'right',fontFamily:'var(--mono)',color:dColor,fontWeight:'600'}},
+          arrow ? el('span',{style:{marginRight:'4px'}},'arrow') : null,
+          changeStr.replace('arrow','')
         )
       );
-      kpiRow.appendChild(card);
+      // Fix: rebuild the last cell properly
+      const lastTd = row.lastChild;
+      lastTd.textContent = '';
+      if (arrow) {
+        const arrowSpan = el('span',{style:{marginRight:'5px', fontSize:'13px'}}, arrow);
+        lastTd.appendChild(arrowSpan);
+      }
+      lastTd.appendChild(document.createTextNode(changeStr));
+      tbody.appendChild(row);
+      rowIdx++;
     });
-    body.appendChild(kpiRow);
+    tbl.appendChild(tbody);
+    body.appendChild(tbl);
 
-    // ── Spectral comparison bar chart (peak region metrics) ──────────
-    const barMetrics = [
-      { key: 'peakWl', label: 'λ max (nm)', unit: 'nm', fmt: v => v ? v.toFixed(1) : '—' },
-      { key: 'maxAb', label: 'Abs max (AU)', unit: 'AU', fmt: v => v ? v.toFixed(4) : '—' },
-      { key: 'fwhm', label: 'FWHM (nm)', unit: 'nm', fmt: v => v ? v.toFixed(1) : '—' },
-      { key: 'peakTrough', label: 'P:T Ratio', unit: '', fmt: v => v ? v.toFixed(2) : '—' },
-    ].filter(m => ref.an[m.key] != null && cmp.an[m.key] != null);
-
-    if (barMetrics.length) {
-      const barTitle = el('div', { style: { fontSize: '12px', fontWeight: '600', color: 'var(--text-2)', marginBottom: '10px', marginTop: '16px' } }, 'Side-by-side comparison');
-      body.appendChild(barTitle);
-
-      barMetrics.forEach(m => {
-        const maxV = Math.max(ref.an[m.key], cmp.an[m.key]);
-        const refPct = (ref.an[m.key] / maxV * 100).toFixed(1);
-        const cmpPct = (cmp.an[m.key] / maxV * 100).toFixed(1);
-
-        const rowWrap = el('div', { style: { marginBottom: '14px' } },
-          el('div', { style: { fontSize: '11px', color: 'var(--text-3)', marginBottom: '6px' } }, m.label)
-        );
-
-        // ref bar
-        const refBar = el('div', { class: 'delta-bar-row' },
-          el('div', { class: 'delta-bar-lbl', style: { color: ref.color, fontFamily: 'var(--mono)', fontSize: '11px' } }, ref.label.length > 12 ? ref.label.slice(0, 12) + '…' : ref.label),
-          el('div', { class: 'delta-bar-track' },
-            el('div', { class: 'delta-bar-fill', style: { width: '0%', background: ref.color + 'BB' } })
-          ),
-          el('div', { class: 'delta-bar-val', style: { color: ref.color } }, m.fmt(ref.an[m.key]) + (m.unit ? ' ' + m.unit : ''))
-        );
-        // cmp bar
-        const cmpBar = el('div', { class: 'delta-bar-row' },
-          el('div', { class: 'delta-bar-lbl', style: { color: cmp.color, fontFamily: 'var(--mono)', fontSize: '11px' } }, cmp.label.length > 12 ? cmp.label.slice(0, 12) + '…' : cmp.label),
-          el('div', { class: 'delta-bar-track' },
-            el('div', { class: 'delta-bar-fill', style: { width: '0%', background: cmp.color + 'BB' } })
-          ),
-          el('div', { class: 'delta-bar-val', style: { color: cmp.color } }, m.fmt(cmp.an[m.key]) + (m.unit ? ' ' + m.unit : ''))
-        );
-
-        rowWrap.appendChild(refBar);
-        rowWrap.appendChild(cmpBar);
-        body.appendChild(rowWrap);
-
-        // Animate bars in after paint
-        setTimeout(() => {
-          refBar.querySelector('.delta-bar-fill').style.width = refPct + '%';
-          cmpBar.querySelector('.delta-bar-fill').style.width = cmpPct + '%';
-        }, 80 + ci * 40);
-      });
-    }
-
-    // ── Spectral shift SVG — shows diff curve ─────────────────────
+    // Spectral diff mini-chart
     const refRaw = getRaw(ref.sc);
     const cmpRaw = getRaw(cmp.sc);
     if (refRaw.length > 10 && cmpRaw.length > 10) {
-      // Interpolate cmp onto ref wavelengths
       function interp(raw, wl) {
         for (let i = 1; i < raw.length; i++) {
           if (raw[i].wl >= wl) {
@@ -2103,127 +2251,91 @@ function buildDeltaComparison(chartScans, lots) {
         }
         return null;
       }
-      const wlMin2 = Math.max(270, Math.min(refRaw[0].wl, cmpRaw[0].wl));
-      const wlMax2 = Math.min(850, Math.max(refRaw[refRaw.length-1].wl, cmpRaw[cmpRaw.length-1].wl));
+      const wlLo = Math.max(270, Math.min(refRaw[0].wl, cmpRaw[0].wl));
+      const wlHi = Math.min(850, Math.max(refRaw[refRaw.length-1].wl, cmpRaw[cmpRaw.length-1].wl));
       const diffPts = [];
-      refRaw.filter(p => p.wl >= wlMin2 && p.wl <= wlMax2).forEach(p => {
-        const cv = interp(cmpRaw, p.wl);
-        if (cv != null) diffPts.push({ wl: p.wl, d: cv - p.ab });
+      refRaw.filter(p => p.wl >= wlLo && p.wl <= wlHi).forEach(p => {
+        const cv2 = interp(cmpRaw, p.wl);
+        if (cv2 != null) diffPts.push({ wl: p.wl, d: cv2 - p.ab });
       });
 
       if (diffPts.length > 5) {
         const dMin = Math.min(0, ...diffPts.map(p => p.d));
         const dMax = Math.max(0, ...diffPts.map(p => p.d));
-        const pad = Math.max(Math.abs(dMax - dMin) * 0.15, 0.001);
+        const pad = Math.max(Math.abs(dMax - dMin) * 0.2, 0.002);
         const lo = dMin - pad, hi = dMax + pad;
-        const SW = 560, SH = 110, SPL = 42, SPR = 14, SPT = 12, SPB = 28;
-        const scW = SW - SPL - SPR, scH = SH - SPT - SPB;
-        const xp = wl => SPL + (wl - wlMin2) / (wlMax2 - wlMin2) * scW;
-        const yp = d => SPT + scH - (d - lo) / (hi - lo) * scH;
+        const SW=620,SH=80,SPL=48,SPR=12,SPT=8,SPB=22;
+        const scW=SW-SPL-SPR,scH=SH-SPT-SPB;
+        const xp = wl => SPL + (wl-wlLo)/(wlHi-wlLo)*scW;
+        const yp = d => SPT + scH - (d-lo)/(hi-lo)*scH;
         const zero = yp(0);
 
         const ns = 'http://www.w3.org/2000/svg';
-        const svg = document.createElementNS(ns, 'svg');
-        svg.setAttribute('viewBox', `0 0 ${SW} ${SH}`);
-        svg.setAttribute('style', 'width:100%;display:block;margin-top:16px');
+        const svg = document.createElementNS(ns,'svg');
+        svg.setAttribute('viewBox',`0 0 ${SW} ${SH}`);
+        svg.setAttribute('style','width:100%;display:block;padding:12px 20px 16px;box-sizing:border-box;');
 
-        // background
-        const bg = document.createElementNS(ns, 'rect');
-        bg.setAttribute('x', SPL); bg.setAttribute('y', SPT);
-        bg.setAttribute('width', scW); bg.setAttribute('height', scH);
-        bg.setAttribute('fill', document.body.classList.contains('light') ? '#fff' : '#0E131C');
-        svg.appendChild(bg);
+        const mkEl = (tag, attrs) => { const e=document.createElementNS(ns,tag); Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v)); return e; };
 
-        // zero line
-        const zl = document.createElementNS(ns, 'line');
-        zl.setAttribute('x1', SPL); zl.setAttribute('x2', SPL + scW);
-        zl.setAttribute('y1', zero); zl.setAttribute('y2', zero);
-        zl.setAttribute('stroke', 'rgba(255,255,255,0.12)'); zl.setAttribute('stroke-dasharray', '4,3');
-        svg.appendChild(zl);
+        // Plot background
+        svg.appendChild(mkEl('rect',{x:SPL,y:SPT,width:scW,height:scH,fill:'var(--surface)',rx:'2'}));
+        // Zero line
+        svg.appendChild(mkEl('line',{x1:SPL,y1:zero,x2:SPL+scW,y2:zero,stroke:'rgba(160,180,208,0.25)',strokeDasharray:'4,3'}));
 
-        // positive fill (cmp > ref)
-        const posD = diffPts.filter((p, i) => p.d >= 0 || (i > 0 && diffPts[i-1].d >= 0));
-        const negD = diffPts.filter((p, i) => p.d <= 0 || (i > 0 && diffPts[i-1].d <= 0));
-
-        // area fill
-        const areaPath = document.createElementNS(ns, 'path');
-        let aD = diffPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${xp(p.wl).toFixed(1)},${yp(p.d).toFixed(1)}`).join(' ');
+        // Area fill
+        let aD = diffPts.map((p,i)=>`${i===0?'M':'L'}${xp(p.wl).toFixed(1)},${yp(p.d).toFixed(1)}`).join(' ');
         aD += ` L${xp(diffPts[diffPts.length-1].wl).toFixed(1)},${zero.toFixed(1)} L${xp(diffPts[0].wl).toFixed(1)},${zero.toFixed(1)} Z`;
-        areaPath.setAttribute('d', aD);
-        areaPath.setAttribute('fill', 'url(#diffGrad' + ci + ')');
-        areaPath.setAttribute('opacity', '0.5');
+        const defs = document.createElementNS(ns,'defs');
+        const gid = 'dg'+ci+'_'+Date.now();
+        const grad = mkEl('linearGradient',{id:gid,x1:'0',y1:'0',x2:'0',y2:'1'});
+        const s1=document.createElementNS(ns,'stop'); s1.setAttribute('offset','0%'); s1.setAttribute('stop-color',cmp.color); s1.setAttribute('stop-opacity','0.5');
+        const s2=document.createElementNS(ns,'stop'); s2.setAttribute('offset','100%'); s2.setAttribute('stop-color',cmp.color); s2.setAttribute('stop-opacity','0.05');
+        grad.appendChild(s1); grad.appendChild(s2); defs.appendChild(grad); svg.appendChild(defs);
+        const area = document.createElementNS(ns,'path'); area.setAttribute('d',aD); area.setAttribute('fill',`url(#${gid})`);
+        svg.appendChild(area);
 
-        const defs = document.createElementNS(ns, 'defs');
-        const grad = document.createElementNS(ns, 'linearGradient');
-        grad.setAttribute('id', 'diffGrad' + ci);
-        grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0'); grad.setAttribute('x2', '0'); grad.setAttribute('y2', '1');
-        const s1 = document.createElementNS(ns, 'stop');
-        s1.setAttribute('offset', '0%'); s1.setAttribute('stop-color', cmp.color); s1.setAttribute('stop-opacity', '0.6');
-        const s2 = document.createElementNS(ns, 'stop');
-        s2.setAttribute('offset', '100%'); s2.setAttribute('stop-color', cmp.color); s2.setAttribute('stop-opacity', '0.05');
-        grad.appendChild(s1); grad.appendChild(s2);
-        defs.appendChild(grad);
-        svg.appendChild(defs);
-        svg.appendChild(areaPath);
+        // Diff line
+        const lineD = diffPts.map((p,i)=>`${i===0?'M':'L'}${xp(p.wl).toFixed(1)},${yp(p.d).toFixed(1)}`).join(' ');
+        svg.appendChild(mkEl('path',{d:lineD,fill:'none',stroke:cmp.color,'stroke-width':'1.5'}));
 
-        // diff line
-        const linePath = document.createElementNS(ns, 'path');
-        linePath.setAttribute('d', diffPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${xp(p.wl).toFixed(1)},${yp(p.d).toFixed(1)}`).join(' '));
-        linePath.setAttribute('fill', 'none');
-        linePath.setAttribute('stroke', cmp.color);
-        linePath.setAttribute('stroke-width', '1.5');
-        svg.appendChild(linePath);
+        // Max divergence annotation
+        const maxPt = diffPts.reduce((a,b)=>Math.abs(b.d)>Math.abs(a.d)?b:a,diffPts[0]);
+        const mx=xp(maxPt.wl), my=yp(maxPt.d);
+        const dotColor = maxPt.d >= 0 ? 'var(--green)' : 'var(--red)';
+        svg.appendChild(mkEl('circle',{cx:mx,cy:my,r:'3',fill:dotColor}));
+        svg.appendChild(mkEl('line',{x1:mx,y1:zero,x2:mx,y2:my,stroke:dotColor,'stroke-width':'1','stroke-dasharray':'2,2',opacity:'0.7'}));
+        const txtX = Math.min(SW-SPR-70, Math.max(SPL+2, mx-35));
+        const txtY = maxPt.d>=0 ? Math.max(SPT+10, my-5) : Math.min(SPT+scH-2, my+11);
+        const annot = document.createElementNS(ns,'text');
+        annot.setAttribute('x',txtX); annot.setAttribute('y',txtY);
+        annot.setAttribute('fill',dotColor); annot.setAttribute('font-size','8.5');
+        annot.setAttribute('font-family','var(--mono)');
+        annot.textContent = (maxPt.d>=0?'+':'') + maxPt.d.toFixed(4)+' AU @ '+maxPt.wl.toFixed(0)+'nm';
+        svg.appendChild(annot);
 
-        // Annotate peak shift with arrow
-        const maxDiffPt = diffPts.reduce((a, b) => Math.abs(b.d) > Math.abs(a.d) ? b : a, diffPts[0]);
-        const ax = xp(maxDiffPt.wl), ay = yp(maxDiffPt.d);
-        const arrowDir = maxDiffPt.d >= 0 ? -1 : 1;
-        const arrowLine = document.createElementNS(ns, 'line');
-        arrowLine.setAttribute('x1', ax); arrowLine.setAttribute('y1', zero);
-        arrowLine.setAttribute('x2', ax); arrowLine.setAttribute('y2', ay + arrowDir * 4);
-        arrowLine.setAttribute('stroke', maxDiffPt.d >= 0 ? 'var(--green)' : 'var(--red)');
-        arrowLine.setAttribute('stroke-width', '1.5');
-        arrowLine.setAttribute('marker-end', 'url(#arrowhead' + ci + ')');
-        svg.appendChild(arrowLine);
+        // X axis labels
+        [wlLo, Math.round((wlLo+wlHi)/2), wlHi].forEach(wl => {
+          const xt = document.createElementNS(ns,'text');
+          xt.setAttribute('x',xp(wl).toFixed(1)); xt.setAttribute('y',SPT+scH+13);
+          xt.setAttribute('fill','rgba(160,180,208,0.5)'); xt.setAttribute('font-size','8');
+          xt.setAttribute('text-anchor','middle'); xt.setAttribute('font-family','var(--mono)');
+          xt.textContent = wl+'nm'; svg.appendChild(xt);
+        });
 
-        const arrowDefs2 = document.createElementNS(ns, 'defs');
-        const marker = document.createElementNS(ns, 'marker');
-        marker.setAttribute('id', 'arrowhead' + ci);
-        marker.setAttribute('markerWidth', '6'); marker.setAttribute('markerHeight', '6');
-        marker.setAttribute('refX', '3'); marker.setAttribute('refY', '3');
-        marker.setAttribute('orient', 'auto');
-        const poly = document.createElementNS(ns, 'polygon');
-        poly.setAttribute('points', '0 0, 6 3, 0 6');
-        poly.setAttribute('fill', maxDiffPt.d >= 0 ? 'var(--green)' : 'var(--red)');
-        marker.appendChild(poly);
-        arrowDefs2.appendChild(marker);
-        svg.appendChild(arrowDefs2);
+        // Y axis label
+        const yt = document.createElementNS(ns,'text');
+        yt.setAttribute('x',SPL-4); yt.setAttribute('y',SPT+scH/2);
+        yt.setAttribute('fill','rgba(160,180,208,0.4)'); yt.setAttribute('font-size','8');
+        yt.setAttribute('text-anchor','middle'); yt.setAttribute('font-family','var(--mono)');
+        yt.setAttribute('transform',`rotate(-90,${SPL-4},${SPT+scH/2})`);
+        yt.textContent='Δ Abs (AU)'; svg.appendChild(yt);
 
-        // label
-        const lbl2 = document.createElementNS(ns, 'text');
-        lbl2.setAttribute('x', Math.min(SW - SPR - 60, Math.max(SPL + 2, ax - 30)));
-        lbl2.setAttribute('y', (Math.min(ay, zero) - 4).toFixed(1));
-        lbl2.setAttribute('fill', maxDiffPt.d >= 0 ? 'var(--green)' : 'var(--red)');
-        lbl2.setAttribute('font-size', '9'); lbl2.setAttribute('font-family', 'var(--mono)');
-        lbl2.textContent = (maxDiffPt.d >= 0 ? '+' : '') + maxDiffPt.d.toFixed(4) + ' AU @ ' + maxDiffPt.wl.toFixed(0) + 'nm';
-        svg.appendChild(lbl2);
-
-        // Y axis
-        const yAxis = document.createElementNS(ns, 'line');
-        yAxis.setAttribute('x1', SPL); yAxis.setAttribute('y1', SPT);
-        yAxis.setAttribute('x2', SPL); yAxis.setAttribute('y2', SPT + scH);
-        yAxis.setAttribute('stroke', 'rgba(160,180,208,0.3)'); yAxis.setAttribute('stroke-width', '1');
-        svg.appendChild(yAxis);
-
-        // Chart title
-        const chartLbl = document.createElementNS(ns, 'text');
-        chartLbl.setAttribute('x', SPL + 4); chartLbl.setAttribute('y', SPT + 10);
-        chartLbl.setAttribute('fill', 'rgba(160,180,208,0.5)');
-        chartLbl.setAttribute('font-size', '9'); chartLbl.setAttribute('font-family', 'var(--mono)');
-        chartLbl.textContent = 'Δ Absorbance (cmp − ref)';
-        svg.appendChild(chartLbl);
-
-        body.appendChild(svg);
+        const chartWrap = el('div',{style:{padding:'0 0 4px',borderTop:'1px solid var(--border)'}});
+        const chartLbl = el('div',{style:{padding:'8px 20px 0',fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)'}},
+          'Δ Absorbance spectrum  (compare − reference)');
+        chartWrap.appendChild(chartLbl);
+        chartWrap.appendChild(svg);
+        body.appendChild(chartWrap);
       }
     }
   });
@@ -2232,32 +2344,44 @@ function buildDeltaComparison(chartScans, lots) {
   return container;
 }
 
+
 function buildCompare(){
   const lots=DB.getLots();const sel=S.compare;
   const q=(S.compareSearch||'').toLowerCase();
-  // Per-lot scan selection — stored in S.compareScanSel: { [lotId]: scanId|'latest'|'first'|'pre-conjugation'|'post-conjugation' }
-  const scanSel=S.compareScanSel||{};
+  const scanChecks = S.compareScanChecks || {};
+  const scanSel = S.compareScanSel || {};
 
-  // Resolve which scan to use for a given lot
-  function resolveCompareScan(lid){
-    const lot=lots.find(l=>l.id===lid);
-    const sc=DB.getScans(lid).sort((a,b)=>new Date(a.date)-new Date(b.date)); // ascending
-    if(!sc.length)return null;
-    sc.forEach(x=>{x._lotSize=lot?lot.size:0;});
-    const mode=scanSel[lid]||'latest';
-    if(mode==='latest')return sc[sc.length-1];
-    if(mode==='first')return sc[0];
-    if(mode==='pre-conjugation')return sc.slice().reverse().find(s=>s.scanType==='pre-conjugation')||null;
-    if(mode==='post-conjugation')return sc.slice().reverse().find(s=>s.scanType==='post-conjugation')||null;
-    // specific scan id
-    return sc.find(s=>s.id===mode)||sc[sc.length-1];
+  // Resolve scans for a lot: checkboxes take priority, else dropdown
+  function resolveCheckedScans(lid) {
+    const lot = lots.find(l => l.id === lid);
+    const sc = DB.getScans(lid).sort((a,b) => new Date(a.date)-new Date(b.date));
+    if (!sc.length) return [];
+    sc.forEach(x => { x._lotSize = lot ? lot.size : 0; });
+    const checked = scanChecks[lid];
+    if (checked && checked.length > 0) return sc.filter(s => checked.includes(s.id));
+    // Fall back to dropdown
+    const mode = scanSel[lid] || 'latest';
+    if (mode === 'latest') return [sc[sc.length-1]];
+    if (mode === 'first') return [sc[0]];
+    if (mode === 'pre-conjugation') { const f = sc.slice().reverse().find(s => s.scanType==='pre-conjugation'); return f ? [f] : []; }
+    if (mode === 'post-conjugation') { const f = sc.slice().reverse().find(s => s.scanType==='post-conjugation'); return f ? [f] : []; }
+    const found = sc.find(s => s.id === mode);
+    return found ? [found] : [sc[sc.length-1]];
   }
+
+  function resolveCompareScan(lid){ const r = resolveCheckedScans(lid); return r[0] || null; }
 
   const chartScans=[];
   sel.forEach(lid=>{
     const lot=lots.find(l=>l.id===lid);
-    const sc=resolveCompareScan(lid);
-    if(sc&&lot){chartScans.push(Object.assign({},sc,{lotLabel:lot.lotNumber+' ('+lot.size+'nm)'}));}
+    if (!lot) return;
+    const resolved = resolveCheckedScans(lid);
+    resolved.forEach(sc => {
+      const label = resolved.length > 1
+        ? lot.lotNumber + ' · ' + (sc.scanLabel || fmtDate(sc.date))
+        : lot.lotNumber + ' (' + lot.size + 'nm)';
+      chartScans.push(Object.assign({}, sc, { lotLabel: label }));
+    });
   });
 
   const rows=sel.map(lid=>{
@@ -2289,21 +2413,26 @@ function buildCompare(){
     });
   }
 
-  // Per-lot scan selectors
+  // Per-lot scan selection: original dropdown style + checkboxes inside the list
   const scanSelPanel = sel.length ? el('div',{class:'pnl'},
-    el('div',{class:'pnl-head'},el('span',{class:'pnl-title'},'Scan Selection'),el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'Choose which scan to display for each lot')),
+    el('div',{class:'pnl-head'},
+      el('span',{class:'pnl-title'},'Scan Selection'),
+      el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},'Choose which scan(s) to display for each lot')
+    ),
     el('div',{class:'pnl-body'},
       el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'10px'}},
         ...sel.map(lid=>{
           const lot=lots.find(l=>l.id===lid);
           if(!lot)return null;
           const allSc=DB.getScans(lid).sort((a,b)=>new Date(a.date)-new Date(b.date));
+          const checked = new Set(scanChecks[lid] || []);
           const mode=scanSel[lid]||'latest';
           const hasPre=allSc.some(s=>s.scanType==='pre-conjugation');
           const hasPost=allSc.some(s=>s.scanType==='post-conjugation');
           const chosen=resolveCompareScan(lid);
           const qcColor=Analytics.qcStatus(allSc,lot.od).color;
 
+          // Dropdown with checkboxes inside each specific scan option
           const sel2=el('select',{class:'inp',style:{fontSize:'11.5px'}});
           const opts=[['latest','Latest scan'],['first','First scan / Incoming QC']];
           if(hasPre)opts.push(['pre-conjugation','Pre-conjugation']);
@@ -2311,18 +2440,39 @@ function buildCompare(){
           opts.push(['──','── Specific Scans ──']);
           allSc.forEach(s=>{
             const typeTag=s.scanType==='pre-conjugation'?' [pre]':s.scanType==='post-conjugation'?' [post-conj]':'';
-            opts.push([s.id,s.date+(s.op?' · '+s.op:'')+typeTag]);
+            const checkMark = checked.has(s.id) ? '☑ ' : '☐ ';
+            opts.push([s.id, checkMark + s.date+(s.op?' · '+s.op:'')+typeTag]);
           });
           opts.forEach(([v,t])=>{
             const opt=document.createElement('option');opt.value=v;opt.textContent=t;
             if(v==='──'){opt.disabled=true;opt.style.color='var(--text-3)';}
-            if(v===mode)opt.selected=true;
+            if(v===mode&&!checked.size)opt.selected=true;
             sel2.appendChild(opt);
           });
           sel2.addEventListener('change',e=>{
-            const newSel=Object.assign({},scanSel,{[lid]:e.target.value});
-            setState({compareScanSel:newSel});
+            const val = e.target.value;
+            // If selecting a specific scan, toggle its checkbox
+            if(allSc.find(s=>s.id===val)){
+              const next = new Set(scanChecks[lid]||[]);
+              if(next.has(val)) next.delete(val); else next.add(val);
+              setState({compareScanChecks: Object.assign({},scanChecks,{[lid]:[...next]}), compareScanSel: Object.assign({},scanSel,{[lid]:val})});
+            } else {
+              // Preset mode: clear checkboxes and use dropdown
+              setState({compareScanChecks: Object.assign({},scanChecks,{[lid]:[]}), compareScanSel: Object.assign({},scanSel,{[lid]:val})});
+            }
           });
+
+          // Show active checkmarks count
+          const checkInfo = checked.size > 0
+            ? el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--blue)',fontFamily:'var(--mono)'}},
+                '☑ '+checked.size+' scan'+(checked.size!==1?'s':'')+' selected · ',
+                el('button',{style:{fontSize:'10.5px',color:'var(--text-3)',background:'none',border:'none',cursor:'pointer',padding:'0',fontFamily:'var(--mono)'},
+                  onClick:()=>setState({compareScanChecks:Object.assign({},scanChecks,{[lid]:[]})})
+                },'clear')
+              )
+            : chosen?el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--text-3)',fontFamily:'var(--mono)'}},
+                '→ '+fmtDate(chosen.date)+(chosen.op?' · '+chosen.op:'')+(chosen.scanType&&chosen.scanType!=='stability'?' · '+chosen.scanType.replace('-',' '):'')
+              ):el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--red)',fontFamily:'var(--mono)'}},'No matching scan found');
 
           return el('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px 14px'}},
             el('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'}},
@@ -2331,9 +2481,7 @@ function buildCompare(){
               el('span',{style:{fontSize:'11px',color:'var(--text-3)'}},lot.size+'nm · '+allSc.length+' scans')
             ),
             sel2,
-            chosen?el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--text-3)',fontFamily:'var(--mono)'}},
-              '→ '+fmtDate(chosen.date)+(chosen.op?' · '+chosen.op:'')+(chosen.scanType&&chosen.scanType!=='stability'?' · '+chosen.scanType.replace('-',' '):'')
-            ):el('div',{style:{marginTop:'6px',fontSize:'10.5px',color:'var(--red)',fontFamily:'var(--mono)'}},'No matching scan found')
+            checkInfo
           );
         }).filter(Boolean)
       )
@@ -2345,8 +2493,8 @@ function buildCompare(){
       el('div',{class:'pnl-head'},
         el('span',{class:'pnl-title'},'Select Lots to Compare'),
         el('div',{style:{display:'flex',gap:'8px',alignItems:'center'}},
-          sel.length?el('span',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)'}},(sel.length)+' selected'):null,
-          sel.length?el('button',{class:'btn btn-ghost btn-sm',onClick:()=>setState({compare:[]})},'Clear all'):null
+          sel.length?el('span',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)'}},(sel.length)+' lot'+(sel.length!==1?'s':'')+', '+chartScans.length+' curve'+(chartScans.length!==1?'s':'')+' selected'):null,
+          sel.length?el('button',{class:'btn btn-ghost btn-sm',style:{color:'var(--red)',borderColor:'rgba(224,92,92,0.3)'},onClick:()=>setState({compare:[],compareScanChecks:{}})},'✕ Clear all'):null
         )
       ),
       el('div',{class:'pnl-body'},
@@ -2714,7 +2862,7 @@ function buildSpectrumChart(scans,title,useLotLabel){
       padding:'6px 18px', fontSize:'13px', fontFamily:'var(--sans)', fontWeight:'500',
       background:'rgba(74,159,224,0.15)', border:'1px solid rgba(74,159,224,0.45)',
       color:'#4A9FE0', borderRadius:'5px', cursor:'pointer',
-      transition:'all 0.15s', display:'block', marginBottom:'10px'
+      transition:'all 0.15s'
     }
   }, '⤡ Zoom');
   zoomBtn.addEventListener('click', () => {
@@ -2733,30 +2881,140 @@ function buildSpectrumChart(scans,title,useLotLabel){
     rebuildSVG();
   });
 
-  const graphArea = el('div', {style:{position:'relative'}}, zoomBtn, wrap);
+  const clearCurvesBtn = el('button', {
+    style: {
+      padding:'6px 14px', fontSize:'13px', fontFamily:'var(--sans)', fontWeight:'500',
+      background:'transparent', border:'1px solid rgba(224,92,92,0.35)',
+      color:'var(--red)', borderRadius:'5px', cursor:'pointer', transition:'all 0.15s'
+    }
+  }, '✕ Clear all curves');
+  clearCurvesBtn.addEventListener('mouseenter', () => { clearCurvesBtn.style.background = 'rgba(224,92,92,0.10)'; });
+  clearCurvesBtn.addEventListener('mouseleave', () => { clearCurvesBtn.style.background = 'transparent'; });
+
+  const selectAllCurvesBtn = el('button', {
+    style: {
+      padding:'6px 14px', fontSize:'13px', fontFamily:'var(--sans)', fontWeight:'500',
+      background:'transparent', border:'1px solid rgba(200,168,75,0.35)',
+      color:'var(--gold)', borderRadius:'5px', cursor:'pointer', transition:'all 0.15s'
+    }
+  }, '✓ Select all curves');
+  selectAllCurvesBtn.addEventListener('mouseenter', () => { selectAllCurvesBtn.style.background = 'rgba(200,168,75,0.10)'; });
+  selectAllCurvesBtn.addEventListener('mouseleave', () => { selectAllCurvesBtn.style.background = 'transparent'; });
+
+  // Tooltip element for legend hover
+  const legTooltip = el('div', {style:{
+    position:'fixed', zIndex:'9999', pointerEvents:'none',
+    background:'var(--panel,#131926)', border:'1px solid rgba(200,168,75,0.4)',
+    color:'var(--text,#E2EAF4)', borderRadius:'6px',
+    padding:'7px 11px', fontSize:'12px', maxWidth:'220px',
+    lineHeight:'1.5', boxShadow:'0 4px 16px rgba(0,0,0,0.4)',
+    opacity:'0', transition:'opacity 0.12s', whiteSpace:'normal'
+  }});
+  document.body.appendChild(legTooltip);
 
   const leg=el('div',{class:'leg'});
   scans.forEach((sc,i)=>{
     const col=SCAN_COLORS[i%SCAN_COLORS.length];
     const lbl=useLotLabel?sc.lotLabel:(sc.scanLabel||fmtDate(sc.date))+(sc.op?' ('+sc.op+')':'');
     const dot=el('span',{style:{width:'18px',height:'2.5px',background:col,display:'inline-block',borderRadius:'1px',flexShrink:'0',verticalAlign:'middle'}});
-    const btn=el('button',{class:'leg-btn',style:{border:'1px solid '+col+'55',color:col,background:col+'10'}},dot,' ',lbl);
-    btn.addEventListener('click',()=>{
-      vis[i]=!vis[i];btn.style.opacity=vis[i]?'1':'0.3';
+    const legBtn=el('button',{class:'leg-btn',style:{border:'1px solid '+col+'55',color:col,background:col+'10'}},dot,' ',lbl);
+    legBtn.addEventListener('click',()=>{
+      vis[i]=!vis[i];legBtn.style.opacity=vis[i]?'1':'0.3';
       rebuildSVG();
     });
-    leg.appendChild(btn);
+    // Description tooltip on hover
+    const desc = sc.description || sc.scanLabel || null;
+    if (desc) {
+      legBtn.addEventListener('mouseenter', e => {
+        legTooltip.textContent = desc;
+        legTooltip.style.opacity = '1';
+      });
+      legBtn.addEventListener('mousemove', e => {
+        const x = e.clientX + 14, y = e.clientY - 10;
+        legTooltip.style.left = Math.min(x, window.innerWidth - 240) + 'px';
+        legTooltip.style.top = y + 'px';
+      });
+      legBtn.addEventListener('mouseleave', () => {
+        legTooltip.style.opacity = '0';
+      });
+    }
+    leg.appendChild(legBtn);
   });
+
+  // Wire clear-all to also reset legend button opacity
+  clearCurvesBtn.addEventListener('click', () => {
+    vis.fill(false);
+    rebuildSVG();
+    Array.from(leg.querySelectorAll('button')).forEach(b => b.style.opacity = '0.3');
+  });
+
+  // Wire select-all curves
+  selectAllCurvesBtn.addEventListener('click', () => {
+    vis.fill(true);
+    rebuildSVG();
+    Array.from(leg.querySelectorAll('button')).forEach(b => b.style.opacity = '1');
+  });
+
+  // Print Graph button
+  const printGraphBtn = el('button', {
+    style: {
+      padding:'6px 14px', fontSize:'13px', fontFamily:'var(--sans)', fontWeight:'500',
+      background:'transparent', border:'1px solid rgba(160,180,208,0.35)',
+      color:'var(--text-2)', borderRadius:'5px', cursor:'pointer', transition:'all 0.15s',
+      marginLeft:'auto'
+    }
+  }, '🖨 Print Graph');
+  printGraphBtn.addEventListener('mouseenter', () => { printGraphBtn.style.background = 'rgba(160,180,208,0.08)'; });
+  printGraphBtn.addEventListener('mouseleave', () => { printGraphBtn.style.background = 'transparent'; });
+  printGraphBtn.addEventListener('click', () => {
+    // Build a minimal print window with just the visible curves
+    const svgClone = wrap.querySelector('svg') ? wrap.querySelector('svg').cloneNode(true) : null;
+    if (!svgClone) return;
+    const visibleLabels = scans.map((sc,i) => vis[i] ? (useLotLabel ? sc.lotLabel : (sc.scanLabel||fmtDate(sc.date))+(sc.op?' ('+sc.op+')':'')) : null).filter(Boolean);
+    const pw = window.open('','_blank','width=900,height=700');
+    pw.document.write(`<!DOCTYPE html><html><head><title>UV-Vis Graph</title><style>
+      body{font-family:Inter,sans-serif;margin:30px;background:#fff;color:#222;}
+      h2{font-size:15px;font-weight:600;margin:0 0 6px;}
+      .sub{font-size:12px;color:#666;margin-bottom:18px;}
+      svg{width:100%;max-width:820px;display:block;border:1px solid #e0e0e0;border-radius:4px;}
+      .leg{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+      .leg-item{display:flex;align-items:center;gap:6px;font-size:12px;}
+      .leg-dot{width:20px;height:3px;border-radius:2px;display:inline-block;}
+      @media print{body{margin:10px}button{display:none}}
+    </style></head><body>
+    <h2>${title}</h2>
+    <div class="sub">${visibleLabels.length} curve${visibleLabels.length!==1?'s':''} · Printed ${new Date().toLocaleDateString()}</div>
+    ${svgClone.outerHTML}
+    <div class="leg">${scans.map((sc,i)=>!vis[i]?'':`<div class="leg-item"><span class="leg-dot" style="background:${SCAN_COLORS[i%SCAN_COLORS.length]}"></span>${useLotLabel?sc.lotLabel:(sc.scanLabel||fmtDate(sc.date))+(sc.op?' ('+sc.op+')':'')}</div>`).join('')}</div>
+    </body></html>`);
+    pw.document.close();
+    pw.focus();
+    setTimeout(() => pw.print(), 400);
+  });
+
+  const btnRow = el('div', {style:{display:'flex',gap:'8px',alignItems:'center',marginBottom:'10px',flexWrap:'wrap'}}, zoomBtn, clearCurvesBtn, selectAllCurvesBtn, printGraphBtn);
+  const graphArea = el('div', {style:{position:'relative'}}, btnRow, wrap);
 
   const hintEl = el('span',{style:{fontSize:'11px',color:'var(--text-3)',fontFamily:'var(--mono)'}}, '⤡ drag to zoom · scroll to zoom · ↺ reset');
 
-  return el('div',{class:'pnl'},
+  const panel = el('div',{class:'pnl'},
     el('div',{class:'pnl-head'},
       el('span',{class:'pnl-title'},title),
       hintEl
     ),
     el('div',{class:'pnl-body'},graphArea,leg)
   );
+
+  // Clean up floating tooltip when panel is removed from DOM
+  const obs = new MutationObserver(() => {
+    if (!document.body.contains(panel)) {
+      legTooltip.remove();
+      obs.disconnect();
+    }
+  });
+  obs.observe(document.body, { childList: true, subtree: true });
+
+  return panel;
 }
 
 // ============================================================================
@@ -2903,9 +3161,17 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
 
   // ── Data points — inside clip so they never escape the plot area ─────────
   const ptGroup=svgEl('g',{'clip-path':`url(#${clipId})`});
-  pts.forEach(p=>{
-    ptGroup.appendChild(svgEl('circle',{cx:p[0].toFixed(2),cy:p[1].toFixed(2),r:'3.5',
-      fill:color,stroke:isLight?'#fff':'#0a0f18',strokeWidth:'1.8'}));
+  pts.forEach((p,i)=>{
+    const circle = svgEl('circle',{cx:p[0].toFixed(2),cy:p[1].toFixed(2),r:'3.5',
+      fill:color,stroke:isLight?'#fff':'#0a0f18',strokeWidth:'1.8'});
+    // Invisible larger hit area
+    const hit = svgEl('circle',{cx:p[0].toFixed(2),cy:p[1].toFixed(2),r:'12',
+      fill:'transparent',cursor:'crosshair'});
+    const valStr = yPrec===0?String(Math.round(data[i].v)):data[i].v.toFixed(yPrec);
+    const tipText = (data[i].scanLabel||fmtDate(data[i].date)) + '\n' + valStr + (unit?' '+unit:'');
+    hit.setAttribute('data-tip', tipText);
+    ptGroup.appendChild(circle);
+    ptGroup.appendChild(hit);
   });
   svg.appendChild(ptGroup);
 
@@ -2938,13 +3204,11 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
   },yAxisLbl));
 
   // ── X tick marks + date labels ───────────────────────────────────────────
-  // Max 5 labels, evenly spread, never overlap
   let xi;
   if(data.length<=5)      xi=data.map((_,i)=>i);
   else if(data.length<=8) xi=[0,Math.round((data.length-1)/3),Math.round(2*(data.length-1)/3),data.length-1];
   else                    xi=[0,Math.round((data.length-1)/4),Math.round((data.length-1)/2),Math.round(3*(data.length-1)/4),data.length-1];
 
-  // Minimum pixel spacing check — skip middle ticks if they'd collide (< 36px apart)
   const xiFiltered=xi.filter((idx,pos)=>{
     if(pos===0||pos===xi.length-1)return true;
     const prev=xi[pos-1],next=xi[pos+1];
@@ -2955,7 +3219,6 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
     const x=xP(i).toFixed(2);
     const yBase=(PT+cH).toFixed(2);
     svg.appendChild(svgEl('line',{x1:x,y1:yBase,x2:x,y2:(PT+cH+TICK).toFixed(2),stroke:axC,strokeWidth:'1.2'}));
-    // Use scan ID label if available, otherwise fall back to date
     const xLbl=data[i].scanLabel||fmtDate(data[i].date).slice(0,5);
     svg.appendChild(svgEl('text',{
       x,y:(PT+cH+TICK+18).toFixed(1),
@@ -2964,16 +3227,48 @@ function buildLongChart(scans,metric,label,unit,color,coaOd){
     },xLbl));
   });
 
-  // ── X axis title — fixed distance below date labels ──────────────────────
-  // y = PT + cH + TICK + date_label(~13) + gap(9) + title
+  // ── X axis title ─────────────────────────────────────────────────────────
   svg.appendChild(svgEl('text',{
     x:(PL+cW/2).toFixed(1),y:(PT+cH+TICK+13+25).toFixed(1),
     fill:titC,fontSize:'9.5',textAnchor:'middle','font-weight':'500',
     'font-family':'Inter,system-ui,sans-serif'
   },'Date'));
 
-  // ── Return: just the SVG in a div, with bottom padding for row breathing room ──
-  return el('div',{style:{padding:'4px 6px 6px'}},svg);
+  // ── Tooltip wrapper ───────────────────────────────────────────────────────
+  const svgWrap = el('div',{style:{padding:'4px 6px 6px',position:'relative'}},svg);
+
+  const tip = el('div',{style:{
+    position:'absolute', pointerEvents:'none',
+    background:isLight?'rgba(255,255,255,0.97)':'rgba(13,19,30,0.97)',
+    border:'1px solid rgba(200,168,75,0.5)',
+    color:isLight?'#222':'#E2EAF4',
+    borderRadius:'6px', padding:'6px 11px',
+    fontSize:'11.5px', fontFamily:'var(--mono,monospace)',
+    lineHeight:'1.6', whiteSpace:'pre',
+    boxShadow:'0 4px 16px rgba(0,0,0,0.35)',
+    opacity:'0', transition:'opacity 0.1s',
+    zIndex:'100'
+  }});
+  svgWrap.appendChild(tip);
+
+  svg.addEventListener('mousemove', e => {
+    const tipData = e.target.getAttribute('data-tip');
+    if (tipData) {
+      tip.textContent = tipData;
+      tip.style.opacity = '1';
+      const rect = svgWrap.getBoundingClientRect();
+      const relX = e.clientX - rect.left;
+      const relY = e.clientY - rect.top;
+      const estimatedW = 150;
+      tip.style.left = (relX + 14 + estimatedW > svgWrap.offsetWidth ? relX - estimatedW - 8 : relX + 14) + 'px';
+      tip.style.top  = (relY - 24) + 'px';
+    } else {
+      tip.style.opacity = '0';
+    }
+  });
+  svg.addEventListener('mouseleave', () => { tip.style.opacity = '0'; });
+
+  return svgWrap;
 }
 
 // ============================================================================
